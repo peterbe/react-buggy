@@ -5,6 +5,10 @@
     border-radius: 3px;
     background: none repeat scroll 0% 0% #999;
     font-size: 80%;
+    text-transform: capitalize;
+}
+.badge-bigger {
+    font-size: 120%;
 }
 .badge-green {
     background: none repeat scroll 0% 0% #5ABA59;
@@ -38,7 +42,8 @@
 }
 
 .email-content-subtitle {
-    font-size: 0.9em;
+    /*font-size: 0.9em;*/
+    margin-bottom: 10px;
 }
 
 .notice {
@@ -164,10 +169,10 @@
 .status-ALL {
     background-color: #f9eae5;
 }
-.status-OPEN, .badge-OPEN {
+.status-OPEN, .badge-open {
     background-color: #6cc644;
 }
-.status-CLOSED, .badge-CLOSED {
+.status-CLOSED, .badge-closed {
     background-color: #bd2c00;
 }
 .status-ASSIGNED, .badge-ASSIGNED {
@@ -397,4 +402,73 @@ body, .post-comment { background-color: #efefef; }
 
 a.external:after {
      content: " " url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAVklEQVR4Xn3PgQkAMQhDUXfqTu7kTtkpd5RA8AInfArtQ2iRXFWT2QedAfttj2FsPIOE1eCOlEuoWWjgzYaB/IkeGOrxXhqB+uA9Bfcm0lAZuh+YIeAD+cAqSz4kCMUAAAAASUVORK5CYII=);
+}
+
+
+/* Progress bar */
+.progress {
+    padding: 3px;
+    margin: 18px;
+    margin-top: 50px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 4px;
+    -webkit-box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25), 0 1px rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25), 0 1px rgba(255, 255, 255, 0.08);
+}
+.progress-bar {
+  height: 12px;
+  border-radius: 2px;
+    background-image: -webkit-linear-gradient(top, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.05));
+  background-image: -moz-linear-gradient(top, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.05));
+  background-image: -o-linear-gradient(top, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.05));
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.05));
+  -webkit-transition: 0.4s linear;
+  -moz-transition: 0.4s linear;
+  -o-transition: 0.4s linear;
+  transition: 0.4s linear;
+  -webkit-transition-property: width, background-color;
+  -moz-transition-property: width, background-color;
+  -o-transition-property: width, background-color;
+  transition-property: width, background-color;
+  -webkit-box-shadow: 0 0 1px 1px rgba(0, 0, 0, 0.25), inset 0 1px rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 1px 1px rgba(0, 0, 0, 0.25), inset 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.markdown pre {
+    padding: 16px;
+    overflow: auto;
+    font-size: 85%;
+    line-height: 1.45;
+    background-color: #f7f7f7;
+    border-radius: 3px;
+
+    /*padding: 16px;
+    overflow: auto;
+    font-size: 85%;
+    line-height: 1.45;
+    background-color: #f7f7f7;
+    border-radius: 3px;*/
+
+}
+.markdown pre code {
+    display: inline;
+    max-width: auto;
+    padding: 0;
+    margin: 0;
+    overflow: visible;
+    line-height: inherit;
+    word-wrap: normal;
+    background-color: transparent;
+    border: 0;
+    font-family: Consolas, "Liberation Mono", Menlo, Courier, monospace;
+}
+.markdown code {
+    padding: 0;
+    padding-top: 0.2em;
+    padding-bottom: 0.2em;
+    margin: 0;
+    font-size: 85%;
+    background-color: rgba(0,0,0,0.04);
+    border-radius: 3px;
+    font-family: Consolas, "Liberation Mono", Menlo, Courier, monospace;
 }

@@ -5,6 +5,10 @@ export default class Nav extends Component {
     countStatuses: PropTypes.object.isRequired,
     selectedStatuses: PropTypes.array.isRequired,
     selectStatus: PropTypes.func.isRequired,
+    toggleShowConfig: PropTypes.func.isRequired,
+    ratelimitLimit: PropTypes.number.isRequired,
+    ratelimitRemaining: PropTypes.number.isRequired,
+    _clearAll:  PropTypes.func.isRequired,
   }
   constructor(props) {
     super(props);
@@ -16,6 +20,11 @@ export default class Nav extends Component {
     event.preventDefault()
     this.props.selectStatus(status)
     // console.log('B', b);
+  }
+
+  toggleShowConfig(event) {
+    event.preventDefault()
+    this.props.toggleShowConfig()
   }
 
   // componentDidMount() {
@@ -85,8 +94,14 @@ export default class Nav extends Component {
                 </li>
                 */}
               <li className="pure-menu-heading">Options</li>
-              <li><a href="#">Config</a></li>
+              <li><a href="#" onClick={e => this.toggleShowConfig(e)}>Config</a></li>
               <li><a href="#">About</a></li>
+              <li>
+                <a
+                  href="#"
+                  title="Debug option"
+                  onClick={(e) => this.props._clearAll(e)}>Clear All<sup>*</sup></a></li>
+
             </ul>
             <p className="bugzfeed-status">
               { this.props.bugzfeedConnected ?
@@ -98,11 +113,40 @@ export default class Nav extends Component {
                 <span title="Connected to Bugzfeed version XXX">Connected</span>
               }
             </p>
+            <RatelimitProgressBar
+              limit={this.props.ratelimitLimit}
+              remaining={this.props.ratelimitRemaining}
+              />
+
           </div>
         </div>
       </div>
    );
   }
+}
+
+const RatelimitProgressBar = ({ limit, remaining }) => {
+  let p = parseInt(100 * remaining / limit)
+  p = Math.max(p, 1)
+  let backgroundColor = '#86e01e' // 100%
+  if (p <= 5) {
+    backgroundColor = '#f63a0f'
+  } else if (p <= 25) {
+    backgroundColor = '#f27011'
+  } else if (p <= 50) {
+    backgroundColor = '#f2b01e'
+  } else if (p <= 75) {
+    backgroundColor = '#f2d31b'
+  }
+  let style = {width: p + '%', backgroundColor: backgroundColor}
+  let title = 'GitHub API Rate limit progress\n'
+  title += `Limit: ${limit} Remaining: ${remaining}`
+  return (
+    <div className="progress"
+      title={title}>
+      <div className="progress-bar" style={style}></div>
+    </div>
+  )
 }
 
 const StatusLink = ({ status, count, clickStatus }) => {

@@ -35,6 +35,9 @@
     "webpack-dev-server": "^1.12.1"
   },
   "dependencies": {
+    "dexie": "1.4.1",
+    "marked": "0.3.5",
+    "moment": "2.14.1",
     "react": "^15.0.1",
     "react-dom": "^15.0.1",
     "whatwg-fetch": "1.0.0"

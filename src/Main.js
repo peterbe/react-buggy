@@ -1,7 +1,30 @@
-import React, { Component } from 'react'
+import React, { Component, PropTypes } from 'react'
 import 'whatwg-fetch'
+import marked from 'marked'
+import moment from 'moment'
+
+marked.setOptions({
+  renderer: new marked.Renderer(),
+  gfm: true,
+  tables: true,
+  breaks: false,
+  pedantic: false,
+  sanitize: true,
+  smartLists: true,
+  smartypants: false
+});
+
 
 export default class Main extends Component {
+  static propTypes = {
+    projects: PropTypes.array.isRequired,
+    removeProject: PropTypes.func.isRequired,
+    addProject: PropTypes.func.isRequired,
+    issue: PropTypes.object,
+    comments: PropTypes.array,
+    showConfig: PropTypes.bool,
+    showAbout: PropTypes.bool,
+  }
   constructor(props) {
     super(props);
     // this.state = { counter: 0 };
@@ -21,28 +44,50 @@ export default class Main extends Component {
   //   clearInterval(this.interval);
   // }
 
-  removeProject(event, project) {
-    event.preventDefault()
-    console.warn('REMOVE', project);
-  }
+  // removeProject(event, project) {
+  //   event.preventDefault()
+  //   console.warn('REMOVE', project);
+  // }
 
   // addProject(project) {
   //   this.props.addProject(project)
   // }
 
   render() {
-    const { projects, addProject } = this.props
+    const {
+      projects,
+      addProject,
+      removeProject,
+      showConfig,
+      showAbout,
+     } = this.props
     // let content = <About/>
     // let content = <Nothing repos={[]}/>
 
     // let projects=[]
-    let content = <Config
-      removeProject={this.removeProject}
-      addProject={(p) => addProject(p)}
-      projects={projects}/>
+    let content
+    if (showConfig) {
+      content = <Config
+        addProject={(p) => addProject(p)}
+        removeProject={(p) => removeProject(p)}
+        projects={projects}/>
+    } else if (showAbout) {
+      content = <About/>
+    } else if (this.props.issue) {
+      content = <Issue
+        issue={this.props.issue}
+        comments={this.props.comments}
+        />
+    } else {
+      content = <Nothing
+        projects={projects}
+        />
+    }
     return (
       <div className="pure-u-1" id="main">
+        <div id="top"></div>
         {content}
+        <div id="bottom"></div>
       </div>
    );
   }
@@ -66,7 +111,7 @@ const About = () => {
   )
 }
 
-const Nothing = ({ repos }) => {
+const Nothing = ({ projects }) => {
   return (
     <div className="email-content">
       <div className="email-content-header pure-g">
@@ -75,7 +120,7 @@ const Nothing = ({ repos }) => {
         </div>
       </div>
 
-      { repos.length ?
+      { projects.length ?
         <div className="email-content-body">
           <p>Select an issue in the left-hand column</p>
         </div>
@@ -92,11 +137,307 @@ const Nothing = ({ repos }) => {
 }
 
 
-class Config extends Component {
+class Issue extends Component {
+  static propTypes = {
+    issue: PropTypes.object.isRequired,
+    comments: PropTypes.array.isRequired,
+  }
 
   constructor(props) {
-    super(props);
-    this.state = { searching: false, searchFailure: null };
+    super(props)
+    this.state = {
+      showSticky: false,
+      atTop: true,
+      atBottom: false,
+    }
+    this.handleScroll = this.handleScroll.bind(this)
+  }
+
+  componentDidMount() {
+    // Listen to scrolling
+    window.addEventListener('scroll', this.handleScroll)
+
+    // Update the human readable "from time" in all datetime tags
+    this.timeUpdater = setInterval(() => {
+      [].slice.call(document.querySelectorAll('abbr.datetime')).forEach(e => {
+        let textContent = moment(e.dataset.raw).fromNow()
+        if (textContent !== e.textContent) {
+          e.textContent = textContent
+        }
+      })
+    }, 1000 * 60)
+  }
+
+  componentWillUnmount() {
+    clearInterval(this.timeUpdater)
+    window.removeEventListener('scroll', this.handleScroll)
+  }
+
+  handleScroll(event) {
+    if (this.scrollThrottle) {
+      clearTimeout(this.scrollThrottle)
+    }
+    this.scrollThrottle = setTimeout(() => {
+      let rect = document.querySelector('#main').getBoundingClientRect()
+      let height = document.querySelector('#main').innerHeight
+      console.log(rect, innerHeight);
+      let atTop = (rect.top + 50) >= 0
+      let atBottom = (rect.bottom - 50) <= innerHeight
+      console.log(atTop, atBottom);
+      // let atBottom = (rect.bottom - 50) <= innerHeight
+      this.setState({
+        showSticky: rect.top < -100,
+        atTop: atTop,
+        atBottom: atBottom,
+      })
+
+    }, 500)
+  }
+
+  scrollTo(event, place) {
+    event.preventDefault()
+    if (place === 'top') {
+      document.getElementById('top').scrollIntoView()
+      this.setState({showSticky: false})
+    } else {
+      this.setState({showSticky: true})
+      document.getElementById('bottom').scrollIntoView()
+    }
+  }
+
+  render() {
+    const { issue, comments } = this.props
+    // console.log(issue);
+    let scrolling = (
+      <div className="scrolling">
+        <p>
+          { this.state.atBottom ? null : <a href="#bottom" onClick={e => scrollTo(e, 'bottom')}>&darr; Bottom</a> }
+          { this.state.atTop ? null : <a href="#top" onClick={e => scrollTo(e, 'top')}>&uarr; Top</a> }
+        </p>
+      </div>
+    )
+
+    let sticky = null
+    if (this.state.showSticky) {
+      sticky = (
+        <div className="sticky-summary">
+          <h5>
+            <a href={issue.metadata.html_url} target="_blank" className="external">{issue.metadata.number}</a>
+            <span className="email-name">{issue.project.org}/{issue.project.repo}</span>
+            <span className={`badge badge-small badge-${issue.state}`}>{issue.state}</span>
+            <a href="#top" onClick={e => this.scrollTo(e, 'top')}>&uarr; Top</a>
+          </h5>
+          <h4>{issue.title}</h4>
+        </div>
+      )
+    }
+
+    let head = (
+      <div className="pure-u-2-3">
+        <h5 className="email-name">{issue.project.org}/{issue.project.repo}</h5>
+        <h2 className="email-content-title">{issue.title}</h2>
+        <p className="external-url">
+          <a href={issue.metadata.html_url} className="external"
+             target="_blank">
+             {issue.metadata.html_url}
+          </a>
+        </p>
+      </div>
+    )
+
+    let controls = (
+      <div className="pure-u-1-3 email-content-controls">
+        <p>
+          { issue.project.private ? <img src="static/images/padlock.png"
+            alt="Padlock"
+            title="Private repository" /> : null }
+          <span className={`badge badge-bigger badge-${issue.state}`}>{issue.state}</span>
+        </p>
+        <button className="pure-button secondary-button">Refresh now</button>
+      </div>
+    )
+
+
+
+    return (
+      <div className="email-content">
+        {scrolling}
+        {sticky}
+
+        <div className="email-content-header pure-g">
+          {head}
+
+          {controls}
+
+          <div className="pure-u">
+            <img
+              className="email-avatar"
+              alt="Avatar"
+              height="32" width="32"
+              src={issue.metadata.user.avatar_url}/>
+          </div>
+
+          <div className="pure-u-3-4">
+            <p className="email-content-subtitle">
+              By <User user={issue.metadata.user}/> at
+              {' '}
+              <Datetime date={issue.metadata.created_at}/>
+              {' '}
+              Last changed
+              {' '}
+              <Datetime date={issue.metadata.updated_at}/>
+            </p>
+
+            <Assignees assignees={issue.metadata.assignees}/>
+
+            <Labels labels={issue.metadata.labels}/>
+
+          </div>
+        </div>
+
+        <div className="email-content-body">
+          <div className="pure-u-3-4">
+            <ShowDescription body={issue.metadata.body} />
+
+          </div>
+        </div>
+
+        {
+          comments.map(comment => {
+            return <Comment
+                comment={comment.metadata}
+                key={comment.id}
+                />
+          })
+        }
+
+        {
+          !comments.length ?
+          <p className="email-content-body">No comments</p> : null
+         }
+
+      </div>
+
+    )
+  }
+}
+
+const ShowDescription = ({ body }) => {
+  if (body && body.length) {
+    let rendered = {__html: marked(body)}
+    return <div className="markdown" dangerouslySetInnerHTML={rendered}></div>
+  } else {
+    return <i>No description provided.</i>
+  }
+}
+
+const Comment = ({ comment }) => {
+  let rendered = {__html: marked(comment.body)}
+  return (
+    <div className="email-content-body">
+      <div className="pure-u">
+        <img
+          className="email-avatar" alt="Avatar" height="32" width="32"
+          src={comment.user.avatar_url} />
+      </div>
+      <div className="pure-u-3-4">
+        <p className="email-content-subtitle">
+          By <User user={comment.user} /> at
+          {' '}
+          <a href={comment.html_url} target="_blank">
+            <Datetime date={comment.created_at} />
+          </a>
+        </p>
+        <div className="markdown" dangerouslySetInnerHTML={rendered}></div>
+      </div>
+
+    </div>
+  )
+}
+
+const Datetime = ({ date }) => {
+  let d = moment(date)
+  return <abbr
+    data-raw={date}
+    className="datetime"
+    title={d.format('dddd, MMMM Do YYYY, h:mm:ss a zz')}
+    >{d.fromNow()}</abbr>
+}
+
+const User = ({ user }) => {
+  // XXX a lot more work can be done
+  return <a href={user.html_url} className="username">{user.login}</a>
+}
+
+
+// http://stackoverflow.com/a/5624139
+function hexToRgb(hex) {
+    // Expand shorthand form (e.g. "03F") to full form (e.g. "0033FF")
+    var shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+    hex = hex.replace(shorthandRegex, function(m, r, g, b) {
+        return r + r + g + g + b + b;
+    });
+
+    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : null;
+}
+
+const Labels = ({ labels }) => {
+  if (!labels.length) {
+    return null
+  }
+
+  return (
+    <p className="email-content-subtitle">
+      {
+        labels.map(label => {
+          let style = {backgroundColor: '#' + label.color}
+          let rgb = hexToRgb(label.color)
+          // https://24ways.org/2010/calculating-color-contrast/
+          let yiq = ((rgb.r*299)+(rgb.g*587)+(rgb.b*114))/1000
+          style.color = (yiq >= 128) ? '#303300' : '#ffffff'
+          return <span
+            key={label.url}
+            className="badge"
+            style={style}
+            >{label.name}</span>
+        })
+      }
+
+    </p>
+  )
+}
+
+const Assignees = ({ assignees }) => {
+  if (!assignees.length) {
+    return null
+  }
+  return (
+    <p className="email-content-subtitle">
+      Assigned to {
+        assignees.map((user) => {
+          return <User user={user} key={user.id}/>
+        })
+      }
+    </p>
+  )
+}
+
+
+class Config extends Component {
+  static propTypes = {
+    projects: PropTypes.array.isRequired,
+    removeProject: PropTypes.func.isRequired,
+    addProject: PropTypes.func.isRequired,
+  }
+
+  constructor(props) {
+    super(props)
+    this.state = { searching: false, searchFailure: null }
   }
 
   onSubmit(event) {
@@ -111,19 +452,30 @@ class Config extends Component {
         this.setState({searching: false})
         if (r.status === 200) {
           return r.json()
+        } else if (r.status === 404) {
+          this.setState({
+            searchFailure: "Project not found. If it's a private repo you need to generate an auth token"
+          })
         } else {
-          this.setState({searchFailure: "Project not found."})
+          this.setState({
+            searchFailure: `Lookup failed (${r.status}, ${r.statusText})`
+          })
         }
       })
       .then(response => {
-        this.setState({searchFailure: null})
-        this.props.addProject({
-          org: response.organization.login,
-          repo: response.name,
-          count: response.open_issues_count,
-        })
-        this.refs.org.value = ''
-        this.refs.repo.value = ''
+        if (response) {
+          this.setState({searchFailure: null})
+          console.log(response);
+          this.props.addProject({
+            id: response.id,
+            org: response.owner.login,
+            repo: response.name,
+            count: response.open_issues_count,
+            private: false, // XXX
+          })
+          this.refs.org.value = ''
+          this.refs.repo.value = ''
+        }
       })
       .catch(err => {
         console.log(err)
@@ -133,8 +485,13 @@ class Config extends Component {
 
   }
 
+  removeProject(event, project) {
+    event.preventDefault()
+    this.props.removeProject(project)
+  }
+
   render() {
-    const { projects, removeProject } = this.props
+    const { projects } = this.props
     return (
       <div className="email-content">
         <div className="email-content-header pure-g">
@@ -166,7 +523,8 @@ class Config extends Component {
                       <td>{project.repo}</td>
                       <td>{project.count}</td>
                       <td>
-                        <a href="#" onClick={(event) => removeProject(event, project)}
+                        <a href="#"
+                          onClick={(event) => this.removeProject(event, project)}
                           title="Remove project"
                           >
                           <img src="static/images/trash.png" alt="Trash"/>

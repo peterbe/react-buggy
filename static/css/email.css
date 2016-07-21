@@ -119,7 +119,7 @@ a {
         margin: 0;
     }
     .email-name {
-        text-transform: uppercase;
+        /*text-transform: uppercase;*/
         color: #999;
     }
     .email-desc {
