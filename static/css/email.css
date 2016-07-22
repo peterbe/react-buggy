@@ -102,30 +102,48 @@ a {
     }
 
 
-
-
 /* Email Item Styles */
 .email-item {
     padding: 0.9em 1em;
     border-bottom: 1px solid #ddd;
     border-left: 6px solid transparent;
+    max-height: 130px;
+    position: relative;
+    overflow: hidden;
 }
-    .email-avatar {
-        border-radius: 3px;
-        margin-right: 0.5em;
-    }
-    .email-name,
-    .email-subject {
-        margin: 0;
-    }
-    .email-name {
-        /*text-transform: uppercase;*/
-        color: #999;
-    }
-    .email-desc {
-        font-size: 80%;
-        margin: 0.4em 0;
-    }
+.email-item .extract {
+    font-size: 80%;
+}
+.email-item .bottom {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    margin: 0;
+    padding: 15px 0 10px 0;
+
+    /* "transparent" only works here because == rgba(0,0,0,0) */
+    background-image: -moz-linear-gradient(top, transparent, white);
+    background-image: linear-gradient(to bottom, transparent, white);
+    background-image: -webkit-linear-gradient(top, rgba(255, 255, 255, 0.2), white);
+}
+.email-avatar {
+    border-radius: 3px;
+    margin-right: 0.5em;
+}
+.email-name,
+.email-subject {
+    margin: 0;
+}
+.email-name {
+    /*text-transform: uppercase;*/
+    color: #999;
+}
+.email-desc {
+    font-size: 80%;
+    margin: 0.4em 0;
+}
 
 .email-item-selected {
     background: #eee;

@@ -1,18 +1,8 @@
 import React, { Component, PropTypes } from 'react'
 import 'whatwg-fetch'
-import marked from 'marked'
 import moment from 'moment'
-
-marked.setOptions({
-  renderer: new marked.Renderer(),
-  gfm: true,
-  tables: true,
-  breaks: false,
-  pedantic: false,
-  sanitize: true,
-  smartLists: true,
-  smartypants: false
-});
+import parse from 'parse-link-header'
+import { ShowProject, RenderMarkdown } from './Common'
 
 
 export default class Main extends Component {
@@ -20,6 +10,7 @@ export default class Main extends Component {
     projects: PropTypes.array.isRequired,
     removeProject: PropTypes.func.isRequired,
     addProject: PropTypes.func.isRequired,
+    fetchResponseProxy: PropTypes.func.isRequired,
     issue: PropTypes.object,
     comments: PropTypes.array,
     showConfig: PropTypes.bool,
@@ -60,6 +51,7 @@ export default class Main extends Component {
       removeProject,
       showConfig,
       showAbout,
+      fetchResponseProxy,
      } = this.props
     // let content = <About/>
     // let content = <Nothing repos={[]}/>
@@ -70,7 +62,9 @@ export default class Main extends Component {
       content = <Config
         addProject={(p) => addProject(p)}
         removeProject={(p) => removeProject(p)}
-        projects={projects}/>
+        projects={projects}
+        fetchResponseProxy={fetchResponseProxy}
+        />
     } else if (showAbout) {
       content = <About/>
     } else if (this.props.issue) {
@@ -223,7 +217,7 @@ class Issue extends Component {
         <div className="sticky-summary">
           <h5>
             <a href={issue.metadata.html_url} target="_blank" className="external">{issue.metadata.number}</a>
-            <span className="email-name">{issue.project.org}/{issue.project.repo}</span>
+            <ShowProject project={issue.project}/>
             <span className={`badge badge-small badge-${issue.state}`}>{issue.state}</span>
             <a href="#top" onClick={e => this.scrollTo(e, 'top')}>&uarr; Top</a>
           </h5>
@@ -234,7 +228,7 @@ class Issue extends Component {
 
     let head = (
       <div className="pure-u-2-3">
-        <h5 className="email-name">{issue.project.org}/{issue.project.repo}</h5>
+        <h5><ShowProject project={issue.project}/></h5>
         <h2 className="email-content-title">{issue.title}</h2>
         <p className="external-url">
           <a href={issue.metadata.html_url} className="external"
@@ -324,15 +318,14 @@ class Issue extends Component {
 
 const ShowDescription = ({ body }) => {
   if (body && body.length) {
-    let rendered = {__html: marked(body)}
-    return <div className="markdown" dangerouslySetInnerHTML={rendered}></div>
+    return <RenderMarkdown text={body}/>
   } else {
     return <i>No description provided.</i>
   }
 }
 
+
 const Comment = ({ comment }) => {
-  let rendered = {__html: marked(comment.body)}
   return (
     <div className="email-content-body">
       <div className="pure-u">
@@ -348,7 +341,7 @@ const Comment = ({ comment }) => {
             <Datetime date={comment.created_at} />
           </a>
         </p>
-        <div className="markdown" dangerouslySetInnerHTML={rendered}></div>
+        <RenderMarkdown text={comment.body}/>
       </div>
 
     </div>
@@ -433,23 +426,137 @@ class Config extends Component {
     projects: PropTypes.array.isRequired,
     removeProject: PropTypes.func.isRequired,
     addProject: PropTypes.func.isRequired,
+    fetchResponseProxy: PropTypes.func.isRequired,
   }
 
   constructor(props) {
     super(props)
-    this.state = { searching: false, searchFailure: null }
+    this.state = {
+      searching: false,
+      searchFailure: null,
+      foundRepos: [],
+    }
+    this.clickedFoundRepo = this.clickedFoundRepo.bind(this)
+    this.closeFoundRepos = this.closeFoundRepos.bind(this)
   }
 
-  onSubmit(event) {
-    event.preventDefault();
-    let org = this.refs.org.value.trim()
-    let repo = this.refs.repo.value.trim()
-    if (org && repo) {
-      this.setState({searching: true})
-      let url = `https://api.github.com/repos/${org}/${repo}`
+  _findUserRepos(owner) {
+    let tasks = 2
+    return new Promise((resolve, reject) => {
+      let baseURL = 'https://api.github.com'
+
+      // fetch by recent events
+      let deepEventFetches = 0
+      const fetchEventsByURL = (url) => {
+        fetch(url)
+        .then(this.props.fetchResponseProxy)
+        .then(r => {
+          if (r.status === 200) {
+            if (r.headers.get('Link') && deepEventFetches < 10) {
+              let parsedLink = parse(r.headers.get('Link'))
+              if (parsedLink.next) {
+                deepEventFetches++
+                tasks++
+                fetchEventsByURL(parsedLink.next.url)
+              }
+            }
+            return r.json()
+          } else {
+            this.setState({
+              searchFailure: `Lookup failed (${r.status}, ${r.statusText})`
+            })
+            reject()
+          }
+        })
+        .then(response => {
+          let existingProjectIds = this.props.projects.map(p => p.id)
+          response.map(event => {
+            if (!existingProjectIds.includes(event.repo.id)) {
+              existingProjectIds.push(event.repo.id)
+              this._findRepo(event.repo.name.split('/')[0], event.repo.name.split('/')[1]).then(repo => {
+                if (repo) {
+                  let found = this.state.foundRepos
+                  if (!found.find(r => r.id === repo.id)) {
+                    found.push(repo)
+                    if (repo.fork && repo.parent) {
+                      found.push(repo.parent)
+                    }
+                    this.setState({foundRepos: found})
+                  }
+                }
+              })
+            }
+          })
+          tasks--
+          if (!tasks) {
+            resolve()
+          }
+        })
+        .catch(err => {
+          console.error(err)
+          reject(err)
+        })
+      }
+      let url = baseURL + `/users/${owner}/events`
+      fetchEventsByURL(url)
+
+      // Fetch all the users repos
+      let deepRepoFetches = 0
+      const fetchReposByURL = (url) => {
+        fetch(url)
+        .then(this.props.fetchResponseProxy)
+        .then(r => {
+          if (r.status === 200) {
+            if (r.headers.get('Link') && deepRepoFetches < 10) {
+              let parsedLink = parse(r.headers.get('Link'))
+              if (parsedLink.next) {
+                deepEventFetches++
+                tasks++
+                fetchReposByURL(parsedLink.next.url)
+              }
+            }
+            return r.json()
+          } else {
+            this.setState({
+              searchFailure: `Lookup failed (${r.status}, ${r.statusText})`
+            })
+          }
+        })
+        .then(repos => {
+          if (repos.length) {
+            let found = this.state.foundRepos
+            repos.forEach(repo => {
+              found.push(repo)
+              if (repo.fork && repo.parent) {
+                found.push(repo.parent)
+              }
+            })
+            this.setState({foundRepos: found})
+          }
+          tasks--
+          if (!tasks) {
+            resolve()
+          }
+        })
+        .catch(err => {
+          console.error(err)
+          reject(err)
+        })
+      }
+      url = baseURL + `/users/${owner}/repos?sort=pushed&type=all&direction=desc`
+      fetchReposByURL(url)
+      tasks--
+
+    })
+  }
+
+  _findRepo(org, repo) {
+    return new Promise((resolve, reject) => {
+      let url = 'https://api.github.com'
+      url += `/repos/${org}/${repo}`
       fetch(url)
+      .then(this.props.fetchResponseProxy)
       .then(r => {
-        this.setState({searching: false})
         if (r.status === 200) {
           return r.json()
         } else if (r.status === 404) {
@@ -460,29 +567,107 @@ class Config extends Component {
           this.setState({
             searchFailure: `Lookup failed (${r.status}, ${r.statusText})`
           })
+          reject()
         }
       })
       .then(response => {
-        if (response) {
-          this.setState({searchFailure: null})
+        this.setState({searchFailure: null})
+        if (!(response.owner && response.owner.login)) {
           console.log(response);
-          this.props.addProject({
-            id: response.id,
-            org: response.owner.login,
-            repo: response.name,
-            count: response.open_issues_count,
-            private: false, // XXX
-          })
-          this.refs.org.value = ''
-          this.refs.repo.value = ''
+          throw new Error(response)
         }
+        resolve(response)
       })
       .catch(err => {
         console.log(err)
+        reject(err)
+      })
+    })
+  }
+
+  onSubmit(event) {
+    event.preventDefault();
+    let org = this.refs.org.value.trim()
+    let repo = this.refs.repo.value.trim()
+    this.setState({searching: true, foundRepos: []})
+    if (org && repo) {
+      this._findRepo(org, repo).then(repo => {
+        if (repo) {
+          // console.log('Repo*', repo);
+          // console.log('LOGIN', repo.owner.login);
+          this.props.addProject({
+            id: repo.id,
+            org: repo.owner.login,
+            repo: repo.name,
+            count: repo.open_issues_count,
+            private: repo.private || false,
+          })
+          this.refs.repo.value = ''
+        }
+        this.setState({searching: false})
+      })
+      .catch(err => {
+        this.setState({searching: false})
+      })
+    } else {
+      this._findUserRepos(org).then(() => {
+        this.setState({searching: false})
+      })
+      .catch(err => {
         this.setState({searching: false})
       })
     }
 
+      //
+      //     } else {
+      //       // It's a list of activities
+      //       let existingProjectIds = this.props.projects.map(p => p.id)
+      //       response.map(event => {
+      //         if (!existingProjectIds.includes(event.repo.id)) {
+      //           existingProjectIds.push(event.repo.id)
+      //           let repoURL = 'https://api.github.com'
+      //           repoURL += '/repos/' + event.repo.name
+      //           fetch(repoURL)
+      //           .then(this.props.fetchResponseProxy)
+      //           .then(r => {
+      //             if (r.status === 200) {
+      //               return r.json()
+      //             }
+      //           })
+      //           .then(repository => {
+      //             let found = this.state.foundRepos
+      //             found.push(repository)
+      //             console.log('FOUND', found);
+      //             this.setState({foundRepos: found})
+      //           })
+      //         }
+      //       })
+      //     }
+      //   }
+      // })
+      // .catch(err => {
+      //   console.log(err)
+      //   this.setState({searching: false})
+      // })
+    // }
+  }
+
+  clickedFoundRepo(event, repo) {
+    event.preventDefault()
+    this.props.addProject({
+      id: repo.id,
+      org: repo.owner.login,
+      repo: repo.name,
+      count: repo.open_issues_count,
+      private: repo.private || false,
+    })
+    let found = this.state.foundRepos.filter(r => r.id !== repo.id)
+    this.setState({foundRepos: found})
+  }
+
+  closeFoundRepos(event) {
+    event.preventDefault()
+    this.setState({foundRepos: []})
   }
 
   removeProject(event, project) {
@@ -508,8 +693,7 @@ class Config extends Component {
           <table className="pure-table">
             <thead>
               <tr>
-                <th>Organization</th>
-                <th>Repository</th>
+                <th>Name</th>
                 <th>Count</th>
                 <th>{' '}</th>
               </tr>
@@ -519,8 +703,7 @@ class Config extends Component {
                 projects.map((project) => {
                   return (
                     <tr key={project.org+project.repo}>
-                      <td>{project.org}</td>
-                      <td>{project.repo}</td>
+                      <td><ShowProject project={project}/></td>
                       <td>{project.count}</td>
                       <td>
                         <a href="#"
@@ -552,7 +735,7 @@ class Config extends Component {
               <input
                 type="text"
                 name="repo"
-                placeholder="Repository"
+                placeholder="Repository (optional)"
                 ref="repo" />
               <button
                 type="submit"
@@ -561,9 +744,67 @@ class Config extends Component {
           </form>
           { this.state.searching ? <p>Searcing...</p> : null }
           { this.state.searchFailure ? <p className="search-failure">{ this.state.searchFailure }</p> : null }
+
+          <FoundRepos
+            repos={this.state.foundRepos}
+            clickedFoundRepo={this.clickedFoundRepo}
+            closeFoundRepos={this.closeFoundRepos}
+            />
         </div>
       </div>
     )
   }
 
+}
+
+
+const FoundRepos = ({ repos, clickedFoundRepo, closeFoundRepos }) => {
+  if (!repos.length) {
+    return null
+  }
+  return (
+    <div>
+      <table className="pure-table pure-table-horizontal">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Count</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+        {
+          repos.map(repo => {
+            // console.log('FOUND', repo)
+            // console.log('Owner', repo.owner.login);
+            return (
+              <tr key={repo.id}>
+                <td>
+                  <a
+                    href={repo.html_url}
+                    title={repo.description}
+                    target="_blank">
+                    {repo.owner.login} / {repo.name}
+                  </a>
+                </td>
+                <td>{repo.open_issues_count}</td>
+                <td>
+                  <button className="pure-button"
+                    onClick={e => clickedFoundRepo(e, repo)}>
+                    +
+                  </button>
+                </td>
+              </tr>
+            )
+          })
+        }
+        </tbody>
+      </table>
+      <button
+        onClick={e => closeFoundRepos(e)}
+        type="button"
+        className="pure-button pure-button-primary">Close</button>
+
+    </div>
+  )
 }

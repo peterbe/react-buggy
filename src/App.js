@@ -5,6 +5,7 @@ import Nav from './Nav';
 import List from './List';
 import Main from './Main';
 import Dexie from 'dexie';
+import { makeExtract } from './Utils';
 
 // If you use React Router, make this component
 // render <Router> with your routes. Currently,
@@ -31,13 +32,14 @@ export default class App extends Component {
     }
     this.selectStatus = this.selectStatus.bind(this)
     this.fetchResponseProxy = this.fetchResponseProxy.bind(this)
+    this.readIssues = this.readIssues.bind(this)
   }
 
   componentDidMount() {
     this.db = new Dexie('buggy')
     this.db.version(1).stores({
       projects: 'id,org,repo,count',
-      issues: 'id,project,state,title,comments,extract,updated_at_ts',
+      issues: 'id,project,state,title,comments,extract,last_actor,updated_at_ts',
       comments: 'id,issue_id,created_at_ts'
     })
     this.db.open().catch(error => {
@@ -101,7 +103,8 @@ export default class App extends Component {
           state: issue.state,
           title: issue.title,
           comments: issue.comments,
-          extract: issue.body.substring(0, 100), // XXX needs work
+          extract: makeExtract(issue.body),
+          last_actor: null,
           metadata: issue,
           updated_at_ts: (new Date(issue.updated_at)).getTime(),
         }
@@ -166,7 +169,7 @@ export default class App extends Component {
   }
 
   issueClicked(issue) {
-    this.setState({issue: issue})
+    this.setState({issue: issue, showConfig: false})
     this.readComments(issue).then(() => {
       this.updateIssueComment(issue).then(() => {
         this.readComments(issue)
@@ -184,7 +187,17 @@ export default class App extends Component {
     .equals(issue.id)
     .toArray()
     .then(comments => {
-      this.setState({comments: comments})
+      if (comments.length) {
+        let lastComment = comments[comments.length - 1]
+        console.log(lastComment);
+        issue.extract = makeExtract(lastComment.metadata.body)
+        issue.last_actor = lastComment.metadata.user
+        this.db.issues.put(issue)
+        this.setState({comments: comments, issue: issue})
+      } else {
+        this.setState({comments: []})
+      }
+
     })
 
   }
@@ -244,6 +257,7 @@ export default class App extends Component {
           showConfig={this.state.showConfig}
           showAbout={this.state.showAbout}
           db={this.db}
+          fetchResponseProxy={this.fetchResponseProxy}
           />
       </Layout>
     );

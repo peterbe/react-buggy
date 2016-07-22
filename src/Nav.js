@@ -140,7 +140,7 @@ const RatelimitProgressBar = ({ limit, remaining }) => {
   }
   let style = {width: p + '%', backgroundColor: backgroundColor}
   let title = 'GitHub API Rate limit progress\n'
-  title += `Limit: ${limit} Remaining: ${remaining}`
+  title += `Limit: ${limit} Remaining: ${remaining} (${p}%)`
   return (
     <div className="progress"
       title={title}>

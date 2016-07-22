@@ -1,4 +1,5 @@
 import React, { Component, PropTypes } from 'react';
+import { ShowProject, RenderMarkdown } from './Common'
 
 
 function escapeRegExp(string){
@@ -135,7 +136,7 @@ export default class List extends Component {
                   <li className={className} key={project.id}>
                     <a href="#"
                       onClick={(e) => this.selectProject(e, project)}
-                      >{project.org}/{project.repo} ({project.count})</a>
+                      >{project.org} / {project.repo} ({project.count})</a>
                   </li>
                 )
               })
@@ -246,8 +247,13 @@ const Issue = ({ issue, issueClicked }) => {
 
       </div>
       <div className="pure-u-5-6">
-        <h5 className="email-name">
-          {issue.project.org} / {issue.project.repo}
+        <h5>
+          <span className={`badge badge-small badge-${issue.state}`}>{issue.state}</span>
+          <ShowProject project={issue.project}/>
+          {' '}
+          <a
+            href={issue.metadata.html_url}
+            target="_blank">#{issue.metadata.number}</a>
         </h5>
         <h4 className="email-subject">
           {
@@ -258,25 +264,27 @@ const Issue = ({ issue, issueClicked }) => {
               alt="Padlock"
               title="Only visible to people who are cool"/> : null
           }
-          <a
-            href={issue.metadata.html_url}
-            target="_blank">{issue.metadata.number}</a>
-          {' '}
           <span>{issue.title}</span>
         </h4>
 
         <p className="email-desc">
-          <img
-            src="static/images/avatar.png"
-            className="email-avatar"
-            alt="Avatar"
-            title="Last person to comment"
-            height="32" width="32"/>
-          <span>{issue.extract}</span>
-          <br/>
-          <span className={`badge badge-small badge-${issue.state}`}>{issue.state}</span>
+          {
+            issue.last_actor ?
+            <img
+              src={issue.last_actor.avatar_url}
+              className="email-avatar"
+              alt="Avatar"
+              title="Last person to comment"
+              height="32" width="32" /> : null
+
+          }
         </p>
+        <div className="extract">
+          <RenderMarkdown text={issue.extract}/>
+        </div>
+
       </div>
+      <span className="bottom"></span>
     </div>
   )
 }

@@ -472,3 +472,26 @@ a.external:after {
     border-radius: 3px;
     font-family: Consolas, "Liberation Mono", Menlo, Courier, monospace;
 }
+
+#list-items h5 {
+    margin-top: 0;
+    margin-bottom: 7px;
+}
+
+span.project-name {
+    font-weight: bold;
+    color: #999;
+    font-size: 110%;
+}
+span.project-name span {
+    padding-left: 2px;
+    padding-right: 2px;
+}
+span.project-name a {
+    text-decoration: none;
+    color: #999;
+}
+span.project-name a:hover {
+    text-decoration: underline;
+    color: #747474;
+}
