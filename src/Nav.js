@@ -127,7 +127,7 @@ export default class Nav extends Component {
 
 const RatelimitProgressBar = ({ limit, remaining }) => {
   let p = parseInt(100 * remaining / limit)
-  p = Math.max(p, 1)
+  // p = Math.max(p, 1)
   let backgroundColor = '#86e01e' // 100%
   if (p <= 5) {
     backgroundColor = '#f63a0f'

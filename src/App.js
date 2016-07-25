@@ -4,6 +4,7 @@ import Dialog from './Dialog';
 import Nav from './Nav';
 import List from './List';
 import Main from './Main';
+import APIDialog from './APIDialog';
 import Dexie from 'dexie';
 import { makeExtract } from './Utils';
 
@@ -94,24 +95,30 @@ export default class App extends Component {
     url += `/repos/${project.org}/${project.repo}/issues`
     return fetch(url)
     .then(this.fetchResponseProxy)
-    .then(r => r.json())
+    .then(r => {
+      if (r.status === 200) {
+        return r.json()
+      }
+    })
     .then(issues => {
-      let rewrapped = issues.map(issue => {
-        return {
-          id: issue.id,
-          project: project,
-          state: issue.state,
-          title: issue.title,
-          comments: issue.comments,
-          extract: makeExtract(issue.body),
-          last_actor: null,
-          metadata: issue,
-          updated_at_ts: (new Date(issue.updated_at)).getTime(),
-        }
-      })
-      this.db.issues.bulkPut(rewrapped);
-      // Need to download closed ones too
-      // XXX need to recurse/paginate here
+      if (issues) {
+        let rewrapped = issues.map(issue => {
+          return {
+            id: issue.id,
+            project: project,
+            state: issue.state,
+            title: issue.title,
+            comments: issue.comments,
+            extract: makeExtract(issue.body),
+            last_actor: null,
+            metadata: issue,
+            updated_at_ts: (new Date(issue.updated_at)).getTime(),
+          }
+        })
+        this.db.issues.bulkPut(rewrapped);
+        // Need to download closed ones too
+        // XXX need to recurse/paginate here
+      }
     })
     .catch(err => {
       console.warn('Unable to download issues from ' + url);
@@ -234,6 +241,11 @@ export default class App extends Component {
     return (
       <Layout>
         {/*<Dialog />*/}
+        <APIDialog
+          toggleShowConfig={()=> this.toggleShowConfig()}
+          ratelimitLimit={this.state.ratelimitLimit}
+          ratelimitRemaining={this.state.ratelimitRemaining}
+          />
         <Nav
           countStatuses={this.state.countStatuses}
           selectedStatuses={this.state.selectedStatuses}
@@ -246,6 +258,7 @@ export default class App extends Component {
         <List
           projects={this.state.projects}
           issues={this.state.issuesAll}
+          activeIssue={this.state.issue}
           issueClicked={(i) => this.issueClicked(i)}
           />
         <Main

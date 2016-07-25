@@ -1,7 +1,6 @@
 import React, { Component } from 'react';
 import marked from 'marked'
 
-
 marked.setOptions({
   renderer: new marked.Renderer(),
   gfm: true,
@@ -10,7 +9,7 @@ marked.setOptions({
   pedantic: false,
   sanitize: true,
   smartLists: true,
-  smartypants: false
+  smartypants: false,
 });
 
 
@@ -25,7 +24,6 @@ export const ShowProject = ({ project }) => {
     </span>
   )
 }
-
 
 export const RenderMarkdown = ({ text }) => {
   let rendered = {__html: marked(text)}

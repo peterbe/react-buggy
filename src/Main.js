@@ -149,7 +149,7 @@ class Issue extends Component {
 
   componentDidMount() {
     // Listen to scrolling
-    window.addEventListener('scroll', this.handleScroll)
+    // window.addEventListener('scroll', this.handleScroll)
 
     // Update the human readable "from time" in all datetime tags
     this.timeUpdater = setInterval(() => {
@@ -164,7 +164,7 @@ class Issue extends Component {
 
   componentWillUnmount() {
     clearInterval(this.timeUpdater)
-    window.removeEventListener('scroll', this.handleScroll)
+    // window.removeEventListener('scroll', this.handleScroll)
   }
 
   handleScroll(event) {
@@ -174,11 +174,8 @@ class Issue extends Component {
     this.scrollThrottle = setTimeout(() => {
       let rect = document.querySelector('#main').getBoundingClientRect()
       let height = document.querySelector('#main').innerHeight
-      console.log(rect, innerHeight);
       let atTop = (rect.top + 50) >= 0
       let atBottom = (rect.bottom - 50) <= innerHeight
-      console.log(atTop, atBottom);
-      // let atBottom = (rect.bottom - 50) <= innerHeight
       this.setState({
         showSticky: rect.top < -100,
         atTop: atTop,
@@ -217,7 +214,9 @@ class Issue extends Component {
         <div className="sticky-summary">
           <h5>
             <a href={issue.metadata.html_url} target="_blank" className="external">{issue.metadata.number}</a>
+            {' '}
             <ShowProject project={issue.project}/>
+            {' '}
             <span className={`badge badge-small badge-${issue.state}`}>{issue.state}</span>
             <a href="#top" onClick={e => this.scrollTo(e, 'top')}>&uarr; Top</a>
           </h5>
@@ -571,10 +570,12 @@ class Config extends Component {
         }
       })
       .then(response => {
-        this.setState({searchFailure: null})
-        if (!(response.owner && response.owner.login)) {
-          console.log(response);
-          throw new Error(response)
+        if (response) {
+          this.setState({searchFailure: null})
+          if (!(response.owner && response.owner.login)) {
+            console.log(response);
+            throw new Error(response)
+          }
         }
         resolve(response)
       })

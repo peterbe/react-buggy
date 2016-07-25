@@ -6,12 +6,16 @@ function escapeRegExp(string){
   return string.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
 }
 
+const SLICE_START = 50
+const SLICE_INCREMENT = 50
+
 
 export default class List extends Component {
   static propTypes = {
     projects: PropTypes.array.isRequired,
     issues: PropTypes.array.isRequired,
     issueClicked: PropTypes.func.isRequired,
+    activeIssue: PropTypes.object,
   }
 
   constructor(props) {
@@ -20,22 +24,25 @@ export default class List extends Component {
       selectedProjects: [],
       showProjects: false,
       search: '',
+      slice: SLICE_START,
     }
+
+    this.handleListScroll = this.handleListScroll.bind(this)
   }
 
-  // componentDidMount() {
-  //   this.interval = setInterval(this.tick.bind(this), 1000);
-  // }
-
-  // tick() {
-  //   this.setState({
-  //     counter: this.state.counter + 1
-  //   });
-  // }
-  //
-  // componentWillUnmount() {
-  //   clearInterval(this.interval);
-  // }
+  handleListScroll(event) {
+    if (this.scrollThrottle) {
+      clearTimeout(this.scrollThrottle)
+    }
+    this.scrollThrottle = setTimeout(() => {
+      let rect = document.querySelector('#list-items').getBoundingClientRect()
+      let height = document.querySelector('#list-items').innerHeight
+      let nearBottom = (rect.bottom - 200) <= innerHeight
+      if (nearBottom && this.state.slice < this.props.issues.length) {
+        this.increaseSlice()
+      }
+    }, 200)
+  }
 
   selectProject(event, project) {
     event.preventDefault()
@@ -57,17 +64,6 @@ export default class List extends Component {
     this.setState({showProjects: !this.state.showProjects})
   }
 
-  // filterIssues(issues) {
-  //   return issues.filter(issue => {
-  //     // XXX need to depend on search, active projects, active statuses
-  //     return issue
-  //   })
-  // }
-  //
-  // refreshFiltering() {
-  //   this.setState({issuesFiltered: this.filterIssues(this.state.issuesAll)})
-  // }
-
   clearSearch() {
     this.refs.search.value = ''
     this.setState({search: ''})
@@ -82,6 +78,15 @@ export default class List extends Component {
 
   submitSearchForm(event) {
     event.preventDefault()
+  }
+
+  increaseSlice() {
+    this.setState({slice: this.state.slice + SLICE_INCREMENT})
+  }
+
+  clickLoadMore(event) {
+    event.preventDefault()
+    this.increaseSlice()
   }
 
   render() {
@@ -166,8 +171,11 @@ export default class List extends Component {
       return issue
     })
 
+
+    let slicedIssues = issues.slice(0, this.state.slice)
+
     return (
-      <div className="pure-u-1" id="list">
+      <div className="pure-u-1" id="list" onScroll={this.handleListScroll}>
         <div id="list-options">
           <form className="pure-form" id="searchform"
             onSubmit={(event) => this.submitSearchForm(event)}>
@@ -185,9 +193,10 @@ export default class List extends Component {
 
         <div id="list-items">
           {
-            issues.map(issue => {
+            slicedIssues.map(issue => {
               return <Issue
                 key={issue.id}
+                active={this.props.activeIssue && this.props.activeIssue.id === issue.id}
                 issueClicked={(i) => this.props.issueClicked(i)}
                 issue={issue}/>
             })
@@ -209,8 +218,8 @@ export default class List extends Component {
 
           <div className="email-item">
             <p>
-              Limited to the XXX most recently changed.<br/>
-              <a href="#">Load more</a>
+              Limited to the {this.state.slice} most recently changed.<br/>
+            <a href="#" onClick={e => this.clickLoadMore(e)}>Load more</a>
             </p>
           </div>{/* /email-item */}
 
@@ -221,12 +230,15 @@ export default class List extends Component {
 }
 
 
-const Issue = ({ issue, issueClicked }) => {
-  // console.log(issue);
+const Issue = ({ issue, issueClicked, active }) => {
   let issueAvatarURL = issue.metadata.user.avatar_url
+  let className = 'email-item pure-g'
+  if (active) {
+    className += ' email-item-active'
+  }
   return (
     <div
-      className="email-item pure-g"
+      className={className}
       onClick={(event) => issueClicked(issue)}>
       <div className="pure-u">
         {/* Only do this if we have an email address */}
@@ -284,7 +296,8 @@ const Issue = ({ issue, issueClicked }) => {
         </div>
 
       </div>
-      <span className="bottom"></span>
+      { !active ? <span className="bottom"></span> : null }
+
     </div>
   )
 }

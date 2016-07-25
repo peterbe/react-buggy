@@ -473,6 +473,19 @@ a.external:after {
     font-family: Consolas, "Liberation Mono", Menlo, Courier, monospace;
 }
 
+.markdown blockquote {
+    padding: 0 1em;
+    color: #777;
+    border-left: 0.25em solid #ddd;
+}
+.markdown blockquote>:last-child {
+    margin-bottom: 0;
+}
+
+.markdown blockquote>:first-child {
+    margin-top: 0;
+}
+
 #list-items h5 {
     margin-top: 0;
     margin-bottom: 7px;
@@ -494,4 +507,24 @@ span.project-name a {
 span.project-name a:hover {
     text-decoration: underline;
     color: #747474;
+}
+
+
+.error-dialog {
+    z-index: 1000;
+    position: absolute;
+    background-color: rgba(255, 255, 255, 0.9);
+    top: 0;
+    right: 0;
+    width: 440px;
+    border-left: 1px solid #a8a8a8;
+    border-bottom: 1px solid #a8a8a8;
+    padding-left: 50px;
+    padding-bottom: 10px;
+    border-bottom-left-radius: 15px;
+}
+
+.error-dialog .close {
+    float: right;
+    margin-right: 15px;
 }
