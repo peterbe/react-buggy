@@ -25,6 +25,7 @@ export default class List extends Component {
       showProjects: false,
       search: '',
       slice: SLICE_START,
+      loadingMore: false,
     }
 
     this.handleListScroll = this.handleListScroll.bind(this)
@@ -173,6 +174,7 @@ export default class List extends Component {
 
 
     let slicedIssues = issues.slice(0, this.state.slice)
+    let canLoadMore = this.state.slice < issues.length
 
     return (
       <div className="pure-u-1" id="list" onScroll={this.handleListScroll}>
@@ -216,12 +218,14 @@ export default class List extends Component {
             </p>
           </div>{/* /email-item */}
 
-          <div className="email-item">
-            <p>
-              Limited to the {this.state.slice} most recently changed.<br/>
-            <a href="#" onClick={e => this.clickLoadMore(e)}>Load more</a>
-            </p>
-          </div>{/* /email-item */}
+          { canLoadMore ?
+            <div className="email-item">
+              <p>
+                Limited to the {this.state.slice} most recently changed.<br/>
+                <a href="#" onClick={e => this.clickLoadMore(e)}>Load more</a>
+              </p>
+            </div> : null
+          }
 
         </div>
       </div>

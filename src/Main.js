@@ -149,7 +149,7 @@ class Issue extends Component {
 
   componentDidMount() {
     // Listen to scrolling
-    // window.addEventListener('scroll', this.handleScroll)
+    window.addEventListener('scroll', this.handleScroll)
 
     // Update the human readable "from time" in all datetime tags
     this.timeUpdater = setInterval(() => {
@@ -164,7 +164,7 @@ class Issue extends Component {
 
   componentWillUnmount() {
     clearInterval(this.timeUpdater)
-    // window.removeEventListener('scroll', this.handleScroll)
+    window.removeEventListener('scroll', this.handleScroll)
   }
 
   handleScroll(event) {
