@@ -7,6 +7,7 @@ import Main from './Main';
 import APIDialog from './APIDialog';
 import Dexie from 'dexie';
 import { makeExtract } from './Utils';
+import parse from 'parse-link-header'
 
 // If you use React Router, make this component
 // render <Router> with your routes. Currently,
@@ -91,39 +92,52 @@ export default class App extends Component {
   downloadNewIssues(project) {
     // Download all open and closed issues we can find for this
     // project.
+
+    let deepFetches = 0
+    const downloadIssues = (url) => {
+      return fetch(url)
+      .then(this.fetchResponseProxy)
+      .then(r => {
+        if (r.status === 200) {
+          if (r.headers.get('Link') && deepFetches < 20) {
+            let parsedLink = parse(r.headers.get('Link'))
+            if (parsedLink.next) {
+              deepFetches++
+              downloadIssues(parsedLink.next.url)
+            }
+          }
+          return r.json()
+        }
+      })
+      .then(issues => {
+        if (issues) {
+          let rewrapped = issues.map(issue => {
+            return {
+              id: issue.id,
+              project: project,
+              state: issue.state,
+              title: issue.title,
+              comments: issue.comments,
+              extract: makeExtract(issue.body),
+              last_actor: null,
+              metadata: issue,
+              updated_at_ts: (new Date(issue.updated_at)).getTime(),
+            }
+          })
+          this.db.issues.bulkPut(rewrapped);
+          // Need to download closed ones too
+          // XXX need to recurse/paginate here
+        }
+      })
+      .catch(err => {
+        console.warn('Unable to download issues from ' + url);
+        console.error(err);
+      })
+    }
     let url = 'https://api.github.com'
     url += `/repos/${project.org}/${project.repo}/issues`
-    return fetch(url)
-    .then(this.fetchResponseProxy)
-    .then(r => {
-      if (r.status === 200) {
-        return r.json()
-      }
-    })
-    .then(issues => {
-      if (issues) {
-        let rewrapped = issues.map(issue => {
-          return {
-            id: issue.id,
-            project: project,
-            state: issue.state,
-            title: issue.title,
-            comments: issue.comments,
-            extract: makeExtract(issue.body),
-            last_actor: null,
-            metadata: issue,
-            updated_at_ts: (new Date(issue.updated_at)).getTime(),
-          }
-        })
-        this.db.issues.bulkPut(rewrapped);
-        // Need to download closed ones too
-        // XXX need to recurse/paginate here
-      }
-    })
-    .catch(err => {
-      console.warn('Unable to download issues from ' + url);
-      console.error(err);
-    })
+    return downloadIssues(url)
+
   }
 
   componentWillUnmount() {
