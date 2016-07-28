@@ -20,7 +20,6 @@ export default class App extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      countStatuses: {},
       selectedStatuses: [],
       projects: [],
       fetching: null,
@@ -41,8 +40,8 @@ export default class App extends Component {
     this.db = new Dexie('buggy')
     this.db.version(1).stores({
       projects: 'id,org,repo,count',
-      issues: 'id,project,state,title,comments,extract,last_actor,updated_at_ts',
-      comments: 'id,issue_id,created_at_ts'
+      issues: 'id,project_id,project,state,title,comments,extract,last_actor,updated_at_ts',
+      comments: 'id,project_id,issue_id,created_at_ts'
     })
     this.db.open().catch(error => {
       console.warn('Unable to open the IndexedDB database');
@@ -75,17 +74,6 @@ export default class App extends Component {
   readIssues() {
     return this.db.issues.orderBy('updated_at_ts').reverse().toArray().then(issues => {
       this.setState({issuesAll: issues})
-      let countStatuses = {}
-      let issuesAll = []
-      issues.forEach(i => {
-        // console.log('ASSIGNEE', i.metadata.assignee)
-        countStatuses[i.state] = (countStatuses[i.state] || 0) + 1
-        issuesAll.push(i)
-      })
-      this.setState({
-        countStatuses: countStatuses,
-        issuesAll: issuesAll,
-      })
     })
   }
 
@@ -93,13 +81,19 @@ export default class App extends Component {
     // Download all open and closed issues we can find for this
     // project.
 
+    let maxDeepFetches = 20
     let deepFetches = 0
     const downloadIssues = (url) => {
       return fetch(url)
       .then(this.fetchResponseProxy)
       .then(r => {
         if (r.status === 200) {
-          if (r.headers.get('Link') && deepFetches < 20) {
+          if (r.headers.get('Link') && deepFetches >= maxDeepFetches) {
+            console.warn(
+              'NOTE! Downloaded ' + maxDeepFetches + 'pages but could go on'
+            )
+          }
+          if (r.headers.get('Link') && deepFetches < maxDeepFetches) {
             let parsedLink = parse(r.headers.get('Link'))
             if (parsedLink.next) {
               deepFetches++
@@ -114,6 +108,7 @@ export default class App extends Component {
           let rewrapped = issues.map(issue => {
             return {
               id: issue.id,
+              project_id: project.id,
               project: project,
               state: issue.state,
               title: issue.title,
@@ -168,8 +163,30 @@ export default class App extends Component {
     let filtered = this.state.projects.filter(p => {
       return p.id !== project.id
     })
-    this.setState({projects: filtered})
-    this.db.projects.delete(project.id)
+    let stateChange = {projects: filtered}
+    if (this.state.issue && this.state.issue.project.id === project.id) {
+      stateChange.issue = null
+    }
+    stateChange.issuesAll = this.state.issuesAll.filter(i => {
+      return i.project.id !== project.id
+    })
+    this.setState(stateChange)
+
+    this.db.comments
+    .where('project_id')
+    .equals(project.id)
+    .delete()
+
+    this.db.issues
+    .where('project_id')
+    .equals(project.id)
+    .delete()
+
+    this.db.projects
+    .where('id')
+    .equals(project.id)
+    .delete()
+
   }
 
   _clearAll(e) {
@@ -233,6 +250,7 @@ export default class App extends Component {
         return {
           id: comment.id,
           issue_id: issue.id,
+          project_id: issue.project.id,
           metadata: comment,
           created_at_ts: (new Date(comment.created_at)).getTime(),
         }
@@ -301,7 +319,7 @@ export default class App extends Component {
           ratelimitRemaining={this.state.ratelimitRemaining}
           />
         <Nav
-          countStatuses={this.state.countStatuses}
+          issues={this.state.issuesAll}
           selectedStatuses={this.state.selectedStatuses}
           selectStatus={this.selectStatus}
           toggleShowConfig={()=> this.toggleShowConfig()}

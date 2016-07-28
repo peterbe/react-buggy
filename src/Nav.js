@@ -2,7 +2,7 @@ import React, { Component, PropTypes } from 'react';
 
 export default class Nav extends Component {
   static propTypes = {
-    countStatuses: PropTypes.object.isRequired,
+    issues: PropTypes.array.isRequired,
     selectedStatuses: PropTypes.array.isRequired,
     selectStatus: PropTypes.func.isRequired,
     toggleShowConfig: PropTypes.func.isRequired,
@@ -27,22 +27,12 @@ export default class Nav extends Component {
     this.props.toggleShowConfig()
   }
 
-  // componentDidMount() {
-  //   this.interval = setInterval(this.tick.bind(this), 1000);
-  // }
-
-  // tick() {
-  //   this.setState({
-  //     counter: this.state.counter + 1
-  //   });
-  // }
-  //
-  // componentWillUnmount() {
-  //   clearInterval(this.interval);
-  // }
-
   render() {
-    let countStatuses = this.props.countStatuses
+    let countStatuses = {}
+    this.props.issues.forEach(issue => {
+      // XXX assignee?
+      countStatuses[issue.state] = (countStatuses[issue.state] || 0) + 1
+    })
     let selectedStatuses = this.props.selectedStatuses
     return (
       <div className="pure-u" id="nav">
