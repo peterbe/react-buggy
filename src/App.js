@@ -177,17 +177,15 @@ export default class App extends Component {
 
   issueClicked(issue) {
     this.setState({issue: issue, showConfig: false})
-    this.readComments(issue).then(() => {
-      this.updateIssueComment(issue).then(() => {
-        this.readComments(issue)
-      })
-    })
+    this.refreshIssue(issue)
+    // this.readComments(issue).then(() => {
+    //   this.updateIssueComments(issue).then(() => {
+    //     this.readComments(issue)
+    //   })
+    // })
   }
 
   readComments(issue) {
-    // .where('i')
-    // .equals(["Hillary", "Clinton"])
-    // console.log('this.db.comments', this.db.comments.where('issue_id').equals(issue.id));
     // XXX Needs an orderBy('created_at_ts')
     return this.db.comments
     .where('issue_id')
@@ -196,11 +194,11 @@ export default class App extends Component {
     .then(comments => {
       if (comments.length) {
         let lastComment = comments[comments.length - 1]
-        console.log(lastComment);
+        // console.log(lastComment);
         issue.extract = makeExtract(lastComment.metadata.body)
         issue.last_actor = lastComment.metadata.user
         this.db.issues.put(issue)
-        this.setState({comments: comments, issue: issue})
+        this.setState({comments: comments})
       } else {
         this.setState({comments: []})
       }
@@ -209,7 +207,7 @@ export default class App extends Component {
 
   }
 
-  updateIssueComment(issue) {
+  updateIssueComments(issue) {
     let url = 'https://api.github.com/'
     url += `repos/${issue.project.org}/${issue.project.repo}/issues/`
     url += `${issue.metadata.number}/comments`
@@ -217,8 +215,6 @@ export default class App extends Component {
     .then(this.fetchResponseProxy)
     .then(r => r.json())
     .then(comments => {
-      // this.setState({comments: comments})
-      // XXX need to store these in the database
       let rewrapped = comments.map(comment => {
         return {
           id: comment.id,
@@ -230,7 +226,51 @@ export default class App extends Component {
       this.db.comments.bulkPut(rewrapped);
       // Needs to update the issue's "extract" and "latest_comment" (for avatar)
       // needs pagination
+      if (this.state.issue && this.state.issue.id === issue.id) {
+        // this is the current open issue, update the comments state
+        this.readComments(issue)
+      }
     })
+  }
+
+  refreshIssue(issue) {
+    // reload the individual issue and update issue's comments
+    let url = 'https://api.github.com/'
+    url += `repos/${issue.project.org}/${issue.project.repo}/issues/`
+    url += `${issue.metadata.number}`
+
+    return fetch(url)
+    .then(this.fetchResponseProxy)
+    .then(r => r.json())
+    .then(response => {
+      let issueWrapped = {
+        id: response.id,
+        project: issue.project,
+        state: response.state,
+        title: response.title,
+        comments: response.comments,
+        extract: issue.extract,
+        last_actor: issue.last_actor,
+        metadata: response,
+        updated_at_ts: (new Date(response.updated_at)).getTime(),
+      }
+      this.db.issues.put(issueWrapped)
+      if (this.state.issue && this.state.issue.id === response.id) {
+        // this is the current open issue, update state.
+        this.setState({issue: issueWrapped})
+      }
+      // let's also update the list of all issues
+      let issuesAll = this.state.issuesAll.map(i => {
+        if (i.id === issueWrapped.id) {
+          return issueWrapped
+        } else {
+          return i
+        }
+      })
+      this.setState({issuesAll: issuesAll})
+      return this.updateIssueComments(issue)
+    })
+
   }
 
   toggleShowConfig() {
@@ -259,18 +299,19 @@ export default class App extends Component {
           projects={this.state.projects}
           issues={this.state.issuesAll}
           activeIssue={this.state.issue}
-          issueClicked={(i) => this.issueClicked(i)}
+          issueClicked={i => this.issueClicked(i)}
           />
         <Main
           projects={this.state.projects}
-          addProject={(p) => this.addProject(p)}
-          removeProject={(p) => this.removeProject(p)}
+          addProject={p => this.addProject(p)}
+          removeProject={p => this.removeProject(p)}
           issue={this.state.issue}
           comments={this.state.comments}
           showConfig={this.state.showConfig}
           showAbout={this.state.showAbout}
           db={this.db}
           fetchResponseProxy={this.fetchResponseProxy}
+          refreshIssue={i => this.refreshIssue(i)}
           />
       </Layout>
     );

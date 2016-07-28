@@ -104,7 +104,7 @@ export default class List extends Component {
           >Clear</button>
       )
     } else {
-      let filterClassName = 'pure-button secondary-button'
+      let filterClassName = 'pure-button button-small'
       if (this.state.selectedProjects.length) {
         filterClassName += ' has-filters'
       }
@@ -114,6 +114,11 @@ export default class List extends Component {
           type="button" title="Filter by Project"
            onClick={(event) => this.toggleShowProjects()}
           >
+            { !this.state.showProjects ?
+              <i className="fa fa-filter" aria-hidden="true"></i> :
+              <i className="fa fa-close" aria-hidden="true"></i>
+             }
+            {' '}
             { this.state.showProjects ? 'Close' : 'Filter' }
             {' '}
             {
@@ -187,6 +192,7 @@ export default class List extends Component {
               className="pure-input-rounded"
               onChange={(event) => this.search(event)}
               placeholder="Search..." />
+            {' '}
             {formButton}
           </form>
         </div>{/* /list-options */}

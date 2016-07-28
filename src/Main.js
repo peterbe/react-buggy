@@ -15,6 +15,7 @@ export default class Main extends Component {
     comments: PropTypes.array,
     showConfig: PropTypes.bool,
     showAbout: PropTypes.bool,
+    refreshIssue: PropTypes.func.isRequired,
   }
   constructor(props) {
     super(props);
@@ -71,6 +72,7 @@ export default class Main extends Component {
       content = <Issue
         issue={this.props.issue}
         comments={this.props.comments}
+        refreshIssue={this.props.refreshIssue}
         />
     } else {
       content = <Nothing
@@ -135,6 +137,7 @@ class Issue extends Component {
   static propTypes = {
     issue: PropTypes.object.isRequired,
     comments: PropTypes.array.isRequired,
+    refreshIssue: PropTypes.func.isRequired,
   }
 
   constructor(props) {
@@ -143,6 +146,7 @@ class Issue extends Component {
       showSticky: false,
       atTop: true,
       atBottom: false,
+      refreshing: false,
     }
     this.handleScroll = this.handleScroll.bind(this)
   }
@@ -152,7 +156,7 @@ class Issue extends Component {
     window.addEventListener('scroll', this.handleScroll)
 
     // Update the human readable "from time" in all datetime tags
-    this.timeUpdater = setInterval(() => {
+    this.timeUpdaterTimer = setInterval(() => {
       [].slice.call(document.querySelectorAll('abbr.datetime')).forEach(e => {
         let textContent = moment(e.dataset.raw).fromNow()
         if (textContent !== e.textContent) {
@@ -160,10 +164,16 @@ class Issue extends Component {
         }
       })
     }, 1000 * 60)
+
+    // Refresh the issue repeatedly whilst this is open
+    this.refreshIssueTimer = setInterval(() => {
+      this.refreshIssue()
+    }, 1000 * 61) // every 61 seconds because the cache is 60 seconds
   }
 
   componentWillUnmount() {
-    clearInterval(this.timeUpdater)
+    clearInterval(this.timeUpdaterTimer)
+    clearInterval(this.refreshIssueTimer)
     window.removeEventListener('scroll', this.handleScroll)
   }
 
@@ -194,6 +204,18 @@ class Issue extends Component {
       this.setState({showSticky: true})
       document.getElementById('bottom').scrollIntoView()
     }
+  }
+
+  refreshIssue() {
+    this.setState({refreshing: true})
+    this.props.refreshIssue(this.props.issue)
+    .then(() => {
+      this.setState({refreshing: false})
+    })
+    .catch(err => {
+      console.error(err)
+      this.setState({refreshing: false})
+    })
   }
 
   render() {
@@ -246,11 +268,17 @@ class Issue extends Component {
             title="Private repository" /> : null }
           <span className={`badge badge-bigger badge-${issue.state}`}>{issue.state}</span>
         </p>
-        <button className="pure-button secondary-button">Refresh now</button>
+        <button
+          className="pure-button button-small"
+          disabled={this.state.refreshing}
+          onClick={e => this.refreshIssue(e)}
+          >
+            <i className={this.state.refreshing ? 'fa fa-refresh fa-spin': 'fa fa-refresh'}></i>
+            {' '}
+            { this.state.refreshing ? 'Refreshing' : 'Refresh now' }
+          </button>
       </div>
     )
-
-
 
     return (
       <div className="email-content">
@@ -619,38 +647,6 @@ class Config extends Component {
       })
     }
 
-      //
-      //     } else {
-      //       // It's a list of activities
-      //       let existingProjectIds = this.props.projects.map(p => p.id)
-      //       response.map(event => {
-      //         if (!existingProjectIds.includes(event.repo.id)) {
-      //           existingProjectIds.push(event.repo.id)
-      //           let repoURL = 'https://api.github.com'
-      //           repoURL += '/repos/' + event.repo.name
-      //           fetch(repoURL)
-      //           .then(this.props.fetchResponseProxy)
-      //           .then(r => {
-      //             if (r.status === 200) {
-      //               return r.json()
-      //             }
-      //           })
-      //           .then(repository => {
-      //             let found = this.state.foundRepos
-      //             found.push(repository)
-      //             console.log('FOUND', found);
-      //             this.setState({foundRepos: found})
-      //           })
-      //         }
-      //       })
-      //     }
-      //   }
-      // })
-      // .catch(err => {
-      //   console.log(err)
-      //   this.setState({searching: false})
-      // })
-    // }
   }
 
   clickedFoundRepo(event, repo) {
@@ -708,10 +704,13 @@ class Config extends Component {
                       <td>{project.count}</td>
                       <td>
                         <a href="#"
+                          className="pure-button button-small"
                           onClick={(event) => this.removeProject(event, project)}
                           title="Remove project"
                           >
-                          <img src="static/images/trash.png" alt="Trash"/>
+                          <i className="fa fa-trash" aria-hidden="true"></i>
+                          {' '}
+                          Remove
                         </a>
                       </td>
                     </tr>
@@ -738,9 +737,14 @@ class Config extends Component {
                 name="repo"
                 placeholder="Repository (optional)"
                 ref="repo" />
+              {' '}
               <button
                 type="submit"
-                className="pure-button pure-button-primary">Find</button>
+                className="pure-button pure-button-primary">
+                <i className="fa fa-search" aria-hidden="true"></i>
+                {' '}
+                Find
+              </button>
             </fieldset>
           </form>
           { this.state.searching ? <p>Searcing...</p> : null }

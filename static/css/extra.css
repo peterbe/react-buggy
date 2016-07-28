@@ -208,7 +208,7 @@
 }
 
 #searchform {
-    margin: 5px 10px;
+    margin: 5px;
 }
 #searchform input[type="text"] {
     width: 285px;
@@ -527,4 +527,9 @@ span.project-name a:hover {
 .error-dialog .close {
     float: right;
     margin-right: 15px;
+}
+
+
+.button-small {
+    font-size: 80%;
 }
