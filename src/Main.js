@@ -22,9 +22,9 @@ export default class Main extends Component {
     // this.state = { counter: 0 };
   }
 
-  // componentDidMount() {
-  //   this.interval = setInterval(this.tick.bind(this), 1000);
-  // }
+  componentDidMount() {
+    console.log("PROJETS", this.props.projects);
+  }
 
   // tick() {
   //   this.setState({

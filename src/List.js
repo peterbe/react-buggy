@@ -6,15 +6,16 @@ function escapeRegExp(string){
   return string.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, '\\$1');
 }
 
-const SLICE_START = 50
-const SLICE_INCREMENT = 50
+const SLICE_START = 5
+const SLICE_INCREMENT = 5
 
 
 export default class List extends Component {
   static propTypes = {
-    projects: PropTypes.array.isRequired,
+    projectsAll: PropTypes.array.isRequired,
     issueClicked: PropTypes.func.isRequired,
     activeIssue: PropTypes.object,
+    db: PropTypes.object,
     // lunrindex: PropTypes.object,
   }
 
@@ -26,9 +27,10 @@ export default class List extends Component {
       showProjects: false,
       issues: [],
       search: '',
-      offsets: {},
-      // slice: SLICE_START,
+      // offsets: {},
+      slice: SLICE_START,
       loadingMore: false,
+      canLoadMore: false,
       // activeIssue: null,
     }
 
@@ -37,7 +39,47 @@ export default class List extends Component {
 
   componentDidMount() {
     console.log('List mounted!');
+
+    this.loadIssues()
+
     // XXX call this.updateLunr()??
+    // let offsets = this.state.offsets
+    // let offsetsKey = ''
+    // if (this.state.selectedProjects.length) {
+    //   offsetsKey = this.state.selectedProjects.map(p => p.id).join('.')
+    // }
+    // offsetsKey += 'search:' + this.state.search
+    //
+    // console.log('OFFSETS', offsets);
+    // console.log('OFFSETSKEY', offsetsKey);
+    // // let offset = this.state.offsets
+
+  }
+
+  loadIssues() {
+    let dbPromise = this.props.db.issues
+
+    if (this.state.selectedProjects.length) {
+      console.log(this.state.selectedProjects);
+      // console.log('dbPromise',dbPromise);
+      dbPromise = dbPromise.where('project_id').anyOf(
+        this.state.selectedProjects.map(p => p.id)
+      )
+    }
+
+    // dbPromise.count().then(count => {
+    //   console.log('Count', count);
+    //   this.setState({canLoadMore: count > this.state.slice})
+    // })
+
+    dbPromise
+    .reverse()
+    .sortBy('updated_at_ts')
+    .then(issues => {
+      this.setState({issues: issues})
+    })
+    // .orderBy('updated_at_ts').reverse()
+
   }
 
   handleListScroll(event) {
@@ -48,7 +90,7 @@ export default class List extends Component {
       let rect = document.querySelector('#list-items').getBoundingClientRect()
       let height = document.querySelector('#list-items').innerHeight
       let nearBottom = (rect.bottom - 200) <= innerHeight
-      if (nearBottom && this.state.slice < this.props.issues.length) {
+      if (nearBottom && this.state.canLoadMore) {
         this.increaseSlice()
       }
     }, 200)
@@ -153,6 +195,7 @@ export default class List extends Component {
         selected.push(project)
       }
       this.setState({selectedProjects: selected, showProjects: false})
+      this.loadIssues()
     }
   }
 
@@ -163,6 +206,7 @@ export default class List extends Component {
   clearSearch() {
     this.refs.search.value = ''
     this.setState({search: ''})
+    this.loadIssues()
     // this.props.refreshFiltering()
   }
 
@@ -174,6 +218,7 @@ export default class List extends Component {
     this.searchThrottleTimer = setTimeout(() => {
       console.log('Searching for...:', this.refs.search.value.trim());
       this.setState({search: this.refs.search.value.trim()})
+      this.loadIssues()
     }, 500)
   }
 
@@ -182,7 +227,8 @@ export default class List extends Component {
   }
 
   increaseSlice() {
-    // this.setState({slice: this.state.slice + SLICE_INCREMENT})
+    this.setState({slice: this.state.slice + SLICE_INCREMENT})
+    this.loadIssues()
   }
 
   clickLoadMore(event) {
@@ -196,7 +242,7 @@ export default class List extends Component {
   }
 
   render() {
-    let totalCount = this.props.projects.reduce((agg, p) => agg + p.count, 0)
+    let totalCount = this.props.projectsAll.reduce((agg, p) => agg + p.count, 0)
     let allClassName = this.state.selectedProjects.length ? '' : 'selected'
 
     let formButton = null
@@ -243,7 +289,7 @@ export default class List extends Component {
               <a href="#" onClick={(e) => this.selectProject(e, 'ALL')}>ALL ({totalCount})</a>
             </li>
             {
-              this.props.projects.map(project => {
+              this.props.projectsAll.map(project => {
                 let className = ''
                 if (this.state.selectedProjects.find(p => p.id === project.id)) {
                   className = 'selected'
@@ -402,6 +448,7 @@ const Issue = ({ issue, issueClicked, active }) => {
               title="Only visible to people who are cool"/> : null
           }
           <span>{issue.title}</span>
+          <br/><small>{issue.updated_at_ts}</small>
         </h4>
 
         <p className="email-desc">

@@ -1,10 +1,10 @@
 import React, { Component } from 'react'
 import Layout from './Layout'
 import Dialog from './Dialog'
-// import Nav from './Nav'
-// import List from './List'
-// import Main from './Main'
-// import APIDialog from './APIDialog'
+import Nav from './Nav'
+import List from './List'
+import Main from './Main'
+import APIDialog from './APIDialog'
 import Dexie from 'dexie'
 import { makeExtract } from './Utils'
 import parse from 'parse-link-header'
@@ -36,10 +36,11 @@ export default class App extends Component {
     }
     this.selectStatus = this.selectStatus.bind(this)
     this.fetchResponseProxy = this.fetchResponseProxy.bind(this)
-    this.readIssues = this.readIssues.bind(this)
+    // this.readIssues = this.readIssues.bind(this)
   }
 
-  componentDidMount() {
+  componentWillMount() {
+    console.log('App will mount');
     this.db = new Dexie('buggy')
     this.db.version(1).stores({
       projects: 'id,org,repo,count',
@@ -50,15 +51,18 @@ export default class App extends Component {
       console.warn('Unable to open the IndexedDB database');
       console.error(error);
     })
+  }
+  componentDidMount() {
+    console.log('Mounting App');
 
-    // this.db.projects.toArray().then(results => {
-    //   if (results.length) {
-    //     this.setState({projects: results})
-    //     // for (var project of results) {
-    //     //   this.downloadNewIssues(project)
-    //     // }
-    //   }
-    // })
+    this.db.projects.toArray().then(results => {
+      if (results.length) {
+        this.setState({projects: results})
+        // for (var project of results) {
+        //   this.downloadNewIssues(project)
+        // }
+      }
+    })
     // // this.readIssues()
     // this.recountStatuses()
   }
@@ -192,9 +196,9 @@ export default class App extends Component {
     if (this.state.issue && this.state.issue.project.id === project.id) {
       stateChange.issue = null
     }
-    stateChange.issuesAll = this.state.issuesAll.filter(i => {
-      return i.project.id !== project.id
-    })
+    // stateChange.issuesAll = this.state.issuesAll.filter(i => {
+    //   return i.project.id !== project.id
+    // })
     this.setState(stateChange)
 
     this.db.comments
@@ -335,44 +339,41 @@ export default class App extends Component {
   }
 
   render() {
-    // <APIDialog
-    //   toggleShowConfig={()=> this.toggleShowConfig()}
-    //   ratelimitLimit={this.state.ratelimitLimit}
-    //   ratelimitRemaining={this.state.ratelimitRemaining}
-    //   />
-    // <Nav
-    //   countStatuses={this.state.countStatuses}
-    //   selectedStatuses={this.state.selectedStatuses}
-    //   selectStatus={this.selectStatus}
-    //   toggleShowConfig={()=> this.toggleShowConfig()}
-    //   ratelimitLimit={this.state.ratelimitLimit}
-    //   ratelimitRemaining={this.state.ratelimitRemaining}
-    //   _clearAll={(e) => this._clearAll(e)}
-    //   />
-    // <List
-    //   projects={this.state.projects}
-    //   activeIssue={this.state.issue}
-    //   issueClicked={i => this.issueClicked(i)}
-    //   db={this.db}
-    //   />
-    // <Main
-    //   projects={this.state.projects}
-    //   addProject={p => this.addProject(p)}
-    //   removeProject={p => this.removeProject(p)}
-    //   issue={this.state.issue}
-    //   comments={this.state.comments}
-    //   showConfig={this.state.showConfig}
-    //   showAbout={this.state.showAbout}
-    //   db={this.db}
-    //   fetchResponseProxy={this.fetchResponseProxy}
-    //   refreshIssue={i => this.refreshIssue(i)}
-    //   />
-    return <h1>Hello</h1>
-    // return (
-    //   <Layout>
-    //
-    //     <div>Hello</div>
-    //   </Layout>
-    // )
+    return (
+      <Layout>
+        <APIDialog
+          toggleShowConfig={()=> this.toggleShowConfig()}
+          ratelimitLimit={this.state.ratelimitLimit}
+          ratelimitRemaining={this.state.ratelimitRemaining}
+          />
+        <Nav
+          countStatuses={this.state.countStatuses}
+          selectedStatuses={this.state.selectedStatuses}
+          selectStatus={this.selectStatus}
+          toggleShowConfig={()=> this.toggleShowConfig()}
+          ratelimitLimit={this.state.ratelimitLimit}
+          ratelimitRemaining={this.state.ratelimitRemaining}
+          _clearAll={(e) => this._clearAll(e)}
+          />
+        <List
+          projectsAll={this.state.projects}
+          activeIssue={this.state.issue}
+          issueClicked={i => this.issueClicked(i)}
+          db={this.db}
+          />
+        <Main
+          projects={this.state.projects}
+          addProject={p => this.addProject(p)}
+          removeProject={p => this.removeProject(p)}
+          issue={this.state.issue}
+          comments={this.state.comments}
+          showConfig={this.state.showConfig}
+          showAbout={this.state.showAbout}
+          db={this.db}
+          fetchResponseProxy={this.fetchResponseProxy}
+          refreshIssue={i => this.refreshIssue(i)}
+          />
+      </Layout>
+    )
   }
 }
