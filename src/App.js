@@ -1,13 +1,14 @@
-import React, { Component } from 'react';
-import Layout from './Layout';
-import Dialog from './Dialog';
-import Nav from './Nav';
-import List from './List';
-import Main from './Main';
-import APIDialog from './APIDialog';
-import Dexie from 'dexie';
-import { makeExtract } from './Utils';
+import React, { Component } from 'react'
+import Layout from './Layout'
+import Dialog from './Dialog'
+// import Nav from './Nav'
+// import List from './List'
+// import Main from './Main'
+// import APIDialog from './APIDialog'
+import Dexie from 'dexie'
+import { makeExtract } from './Utils'
 import parse from 'parse-link-header'
+import elasticlunr from 'elasticlunr'
 
 // If you use React Router, make this component
 // render <Router> with your routes. Currently,
@@ -17,13 +18,15 @@ import parse from 'parse-link-header'
 // https://github.com/reactjs/react-router/issues/2182
 
 export default class App extends Component {
+
   constructor(props) {
-    super(props);
+    super(props)
     this.state = {
+      countStatuses: {},
       selectedStatuses: [],
       projects: [],
       fetching: null,
-      issuesAll: [],
+      // issuesAll: [],
       issue: null,
       comments: [],
       showConfig: false,
@@ -48,17 +51,22 @@ export default class App extends Component {
       console.error(error);
     })
 
-    this.db.projects.toArray().then(results => {
-      if (results.length) {
-        this.setState({projects: results})
-        for (var project of results) {
-          this.downloadNewIssues(project)
-        }
-      }
-    })
+    // this.db.projects.toArray().then(results => {
+    //   if (results.length) {
+    //     this.setState({projects: results})
+    //     // for (var project of results) {
+    //     //   this.downloadNewIssues(project)
+    //     // }
+    //   }
+    // })
+    // // this.readIssues()
+    // this.recountStatuses()
+  }
 
-    this.readIssues()
-
+  componentWillUnmount() {
+    if (this.db) {
+      this.db.close()  // not sure if this is needed but feels good
+    }
   }
 
   fetchResponseProxy(response) {
@@ -71,11 +79,34 @@ export default class App extends Component {
     return response
   }
 
-  readIssues() {
-    return this.db.issues.orderBy('updated_at_ts').reverse().toArray().then(issues => {
-      this.setState({issuesAll: issues})
+  recountStatuses() {
+    this.db.issues
+    .where('state')
+    .equals('open')
+    .count()
+    .then(count => {
+      let counts = this.state.countStatuses
+      counts.open = count
+      this.setState({countStatuses: counts})
+    })
+
+    this.db.issues
+    .where('state')
+    .equals('closed')
+    .count()
+    .then(count => {
+      let counts = this.state.countStatuses
+      counts.closed = count
+      this.setState({countStatuses: counts})
     })
   }
+
+  // readIssues() {
+  //   return this.db.issues.orderBy('updated_at_ts').reverse().toArray().then(issues => {
+  //     this.setState({issuesAll: issues})
+  //     this.updateLunr()
+  //   })
+  // }
 
   downloadNewIssues(project) {
     // Download all open and closed issues we can find for this
@@ -133,12 +164,6 @@ export default class App extends Component {
     url += `/repos/${project.org}/${project.repo}/issues`
     return downloadIssues(url)
 
-  }
-
-  componentWillUnmount() {
-    if (this.db) {
-      this.db.close()  // not sure if this is needed but feels good
-    }
   }
 
   selectStatus(status) {
@@ -202,7 +227,7 @@ export default class App extends Component {
       alert('DB blocked')
     }
     r.onerror = () => {
-      alert("Couldn't delete database");
+      alert('Could not delete database');
     }
   }
 
@@ -291,15 +316,15 @@ export default class App extends Component {
         // this is the current open issue, update state.
         this.setState({issue: issueWrapped})
       }
-      // let's also update the list of all issues
-      let issuesAll = this.state.issuesAll.map(i => {
-        if (i.id === issueWrapped.id) {
-          return issueWrapped
-        } else {
-          return i
-        }
-      })
-      this.setState({issuesAll: issuesAll})
+      // // let's also update the list of all issues
+      // let issuesAll = this.state.issuesAll.map(i => {
+      //   if (i.id === issueWrapped.id) {
+      //     return issueWrapped
+      //   } else {
+      //     return i
+      //   }
+      // })
+      // this.setState({issuesAll: issuesAll})
       return this.updateIssueComments(issue)
     })
 
@@ -310,42 +335,44 @@ export default class App extends Component {
   }
 
   render() {
-    return (
-      <Layout>
-        {/*<Dialog />*/}
-        <APIDialog
-          toggleShowConfig={()=> this.toggleShowConfig()}
-          ratelimitLimit={this.state.ratelimitLimit}
-          ratelimitRemaining={this.state.ratelimitRemaining}
-          />
-        <Nav
-          issues={this.state.issuesAll}
-          selectedStatuses={this.state.selectedStatuses}
-          selectStatus={this.selectStatus}
-          toggleShowConfig={()=> this.toggleShowConfig()}
-          ratelimitLimit={this.state.ratelimitLimit}
-          ratelimitRemaining={this.state.ratelimitRemaining}
-          _clearAll={(e) => this._clearAll(e)}
-          />
-        <List
-          projects={this.state.projects}
-          issues={this.state.issuesAll}
-          activeIssue={this.state.issue}
-          issueClicked={i => this.issueClicked(i)}
-          />
-        <Main
-          projects={this.state.projects}
-          addProject={p => this.addProject(p)}
-          removeProject={p => this.removeProject(p)}
-          issue={this.state.issue}
-          comments={this.state.comments}
-          showConfig={this.state.showConfig}
-          showAbout={this.state.showAbout}
-          db={this.db}
-          fetchResponseProxy={this.fetchResponseProxy}
-          refreshIssue={i => this.refreshIssue(i)}
-          />
-      </Layout>
-    );
+    // <APIDialog
+    //   toggleShowConfig={()=> this.toggleShowConfig()}
+    //   ratelimitLimit={this.state.ratelimitLimit}
+    //   ratelimitRemaining={this.state.ratelimitRemaining}
+    //   />
+    // <Nav
+    //   countStatuses={this.state.countStatuses}
+    //   selectedStatuses={this.state.selectedStatuses}
+    //   selectStatus={this.selectStatus}
+    //   toggleShowConfig={()=> this.toggleShowConfig()}
+    //   ratelimitLimit={this.state.ratelimitLimit}
+    //   ratelimitRemaining={this.state.ratelimitRemaining}
+    //   _clearAll={(e) => this._clearAll(e)}
+    //   />
+    // <List
+    //   projects={this.state.projects}
+    //   activeIssue={this.state.issue}
+    //   issueClicked={i => this.issueClicked(i)}
+    //   db={this.db}
+    //   />
+    // <Main
+    //   projects={this.state.projects}
+    //   addProject={p => this.addProject(p)}
+    //   removeProject={p => this.removeProject(p)}
+    //   issue={this.state.issue}
+    //   comments={this.state.comments}
+    //   showConfig={this.state.showConfig}
+    //   showAbout={this.state.showAbout}
+    //   db={this.db}
+    //   fetchResponseProxy={this.fetchResponseProxy}
+    //   refreshIssue={i => this.refreshIssue(i)}
+    //   />
+    return <h1>Hello</h1>
+    // return (
+    //   <Layout>
+    //
+    //     <div>Hello</div>
+    //   </Layout>
+    // )
   }
 }

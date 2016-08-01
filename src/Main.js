@@ -588,7 +588,7 @@ class Config extends Component {
           return r.json()
         } else if (r.status === 404) {
           this.setState({
-            searchFailure: "Project not found. If it's a private repo you need to generate an auth token"
+            searchFailure: 'Project not found. If it\'s a private repo you need to generate an auth token'
           })
         } else {
           this.setState({

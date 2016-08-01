@@ -2,7 +2,7 @@ import React, { Component, PropTypes } from 'react';
 
 export default class Nav extends Component {
   static propTypes = {
-    issues: PropTypes.array.isRequired,
+    countStatuses: PropTypes.object.isRequired,
     selectedStatuses: PropTypes.array.isRequired,
     selectStatus: PropTypes.func.isRequired,
     toggleShowConfig: PropTypes.func.isRequired,
@@ -28,12 +28,10 @@ export default class Nav extends Component {
   }
 
   render() {
-    let countStatuses = {}
-    this.props.issues.forEach(issue => {
-      // XXX assignee?
-      countStatuses[issue.state] = (countStatuses[issue.state] || 0) + 1
-    })
-    let selectedStatuses = this.props.selectedStatuses
+    let {
+      countStatuses,
+      selectedStatuses
+    } = this.props
     return (
       <div className="pure-u" id="nav">
         <a href="#" className="nav-menu-button">Menu</a>
@@ -66,23 +64,6 @@ export default class Nav extends Component {
                     status={'assigned'}
                     count={countStatuses.assigned} />
                 </li>
-                {/*
-                <li className="label">
-                  <a href="#" onClick={this.clickStatus.bind('open')}>
-                    <span className="status status-open"></span>OPEN ({countStatus.open || 0})
-                  </a>
-                </li>
-                <li className="label">
-                  <a href="#" onClick={this.clickStatus.bind('closed')}>
-                    <span className="status status-closed"></span>CLOSED ({countStatus.closed || 0})
-                  </a>
-                </li>
-                <li className="label">
-                  <a href="#" onClick={this.clickStatus.bind('assigned')}>
-                    <span className="status status-assigned"></span>ASSIGNED TO ME ({countStatus.assigned || 0})
-                  </a>
-                </li>
-                */}
               <li className="pure-menu-heading">Options</li>
               <li><a href="#" onClick={e => this.toggleShowConfig(e)}>Config</a></li>
               <li><a href="#">About</a></li>
@@ -147,7 +128,7 @@ const StatusLink = ({ status, count, clickStatus }) => {
     'closed': 'CLOSED',
     'assigned': 'ASSIGNED TO ME',
   }[status]
-  let className = "status status-" + status.toUpperCase()
+  let className = 'status status-' + status.toUpperCase()
   return (
     <a href="#" onClick={(e) => clickStatus(e, status)}>
       <span className={className}></span>{text} ({count})

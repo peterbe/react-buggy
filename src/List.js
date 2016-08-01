@@ -3,7 +3,7 @@ import { ShowProject, RenderMarkdown } from './Common'
 
 
 function escapeRegExp(string){
-  return string.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
+  return string.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, '\\$1');
 }
 
 const SLICE_START = 50
@@ -13,22 +13,31 @@ const SLICE_INCREMENT = 50
 export default class List extends Component {
   static propTypes = {
     projects: PropTypes.array.isRequired,
-    issues: PropTypes.array.isRequired,
     issueClicked: PropTypes.func.isRequired,
     activeIssue: PropTypes.object,
+    // lunrindex: PropTypes.object,
   }
 
   constructor(props) {
-    super(props);
+    super(props)
+
     this.state = {
       selectedProjects: [],
       showProjects: false,
+      issues: [],
       search: '',
-      slice: SLICE_START,
+      offsets: {},
+      // slice: SLICE_START,
       loadingMore: false,
+      // activeIssue: null,
     }
 
     this.handleListScroll = this.handleListScroll.bind(this)
+  }
+
+  componentDidMount() {
+    console.log('List mounted!');
+    // XXX call this.updateLunr()??
   }
 
   handleListScroll(event) {
@@ -43,6 +52,92 @@ export default class List extends Component {
         this.increaseSlice()
       }
     }, 200)
+  }
+
+  updateLunr() {
+    let t0=performance.now()
+    this.lunrindex = elasticlunr(function() {
+      this.addField('title')
+      this.addField('body')
+      this.addField('type')
+      this.addField('issue_id')
+      this.addField('project_id')
+      this.setRef('id')
+      // not store the original JSON document to reduce the index size
+      this.saveDocument(false)
+    })
+
+    this.state.issuesAll.forEach(issue => {
+      this.lunrindex.addDoc({
+        id: issue.id,
+        title: issue.title,
+        body: issue.metadata.body,
+        type: 'ISSUE',
+        issue_id: issue.id,
+        project_id: issue.project.id
+      })
+    })
+    let t1=performance.now()
+    console.log('THAT TOOK ' + (t1 - t0)/ 1000);
+    // console.log('READ', issues.length, 'issues');
+  }
+
+  downloadNewIssues(project) {
+    // Download all open and closed issues we can find for this
+    // project.
+
+    let maxDeepFetches = 20
+    let deepFetches = 0
+    const downloadIssues = (url) => {
+      return fetch(url)
+      .then(this.fetchResponseProxy)
+      .then(r => {
+        if (r.status === 200) {
+          if (r.headers.get('Link') && deepFetches >= maxDeepFetches) {
+            console.warn(
+              'NOTE! Downloaded ' + maxDeepFetches + 'pages but could go on'
+            )
+          }
+          if (r.headers.get('Link') && deepFetches < maxDeepFetches) {
+            let parsedLink = parse(r.headers.get('Link'))
+            if (parsedLink.next) {
+              deepFetches++
+              downloadIssues(parsedLink.next.url)
+            }
+          }
+          return r.json()
+        }
+      })
+      .then(issues => {
+        if (issues) {
+          let rewrapped = issues.map(issue => {
+            return {
+              id: issue.id,
+              project_id: project.id,
+              project: project,
+              state: issue.state,
+              title: issue.title,
+              comments: issue.comments,
+              extract: makeExtract(issue.body),
+              last_actor: null,
+              metadata: issue,
+              updated_at_ts: (new Date(issue.updated_at)).getTime(),
+            }
+          })
+          this.db.issues.bulkPut(rewrapped);
+          // Need to download closed ones too
+          // XXX need to recurse/paginate here
+        }
+      })
+      .catch(err => {
+        console.warn('Unable to download issues from ' + url);
+        console.error(err);
+      })
+    }
+    let url = 'https://api.github.com'
+    url += `/repos/${project.org}/${project.repo}/issues`
+    return downloadIssues(url)
+
   }
 
   selectProject(event, project) {
@@ -70,11 +165,16 @@ export default class List extends Component {
     this.setState({search: ''})
     // this.props.refreshFiltering()
   }
+
   search() {
     // throttle this change
-    this.setState({search: this.refs.search.value.trim()})
-    // XXX Start a throttle that soon makes a filtering thing
-    // this.props.refreshFiltering() // placeholder solution
+    if (this.searchThrottleTimer) {
+      clearTimeout(this.searchThrottleTimer)
+    }
+    this.searchThrottleTimer = setTimeout(() => {
+      console.log('Searching for...:', this.refs.search.value.trim());
+      this.setState({search: this.refs.search.value.trim()})
+    }, 500)
   }
 
   submitSearchForm(event) {
@@ -82,12 +182,17 @@ export default class List extends Component {
   }
 
   increaseSlice() {
-    this.setState({slice: this.state.slice + SLICE_INCREMENT})
+    // this.setState({slice: this.state.slice + SLICE_INCREMENT})
   }
 
   clickLoadMore(event) {
     event.preventDefault()
     this.increaseSlice()
+  }
+
+  issueClicked(issue) {
+    // this.setState({activeIssue: issue})
+    this.props.issueClicked(issue)
   }
 
   render() {
@@ -157,29 +262,39 @@ export default class List extends Component {
       )
     }
 
-    let searchRegex = null
-    if (this.state.search) {
-      searchRegex = new RegExp(escapeRegExp(this.state.search), 'i')
-    }
-    let issues = this.props.issues.filter(issue => {
-      // XXX need to depend on active statuses
+    // let searchRegex = null
+    // if (this.state.search) {
+    //   // searchRegex = new RegExp(escapeRegExp(this.state.search), 'i')
+    //   if (this.props.lunrindex) {
+    //     let searchResults = this.props.lunrindex.search(this.state.search)
+    //     console.log(searchResults);
+    //     let refs = searchResults.map(result => parseInt(result.ref))
+    //     // let refs = searchResults.map(result => result.ref)
+    //     console.log('REFS', refs);
+    //     this.props.db.issues.where('id').anyOf(refs).toArray().then(issues => {
+    //       console.log('FOUND', issues);
+    //     })
+    //   }
+    // }
+    // let issues = this.props.issues.filter(issue => {
+    //   // XXX need to depend on active statuses
+    //
+    //   if (this.state.selectedProjects.length) {
+    //     if (!this.state.selectedProjects.find(p => p.id === issue.project.id)) {
+    //       return false
+    //     }
+    //   }
+    //   // if (searchRegex) {
+    //   //   if (issue.title.search(searchRegex) < 0) {
+    //   //     return false
+    //   //   }
+    //   // }
+    //   return issue
+    // })
 
-      if (this.state.selectedProjects.length) {
-        if (!this.state.selectedProjects.find(p => p.id === issue.project.id)) {
-          return false
-        }
-      }
-      if (searchRegex) {
-        if (issue.title.search(searchRegex) < 0) {
-          return false
-        }
-      }
-      return issue
-    })
-
-
-    let slicedIssues = issues.slice(0, this.state.slice)
-    let canLoadMore = this.state.slice < issues.length
+    // let slicedIssues = issues.slice(0, this.state.slice)
+    // let canLoadMore = this.state.slice < issues.length
+    let canLoadMore = this.state.canLoadMore
 
     return (
       <div className="pure-u-1" id="list" onScroll={this.handleListScroll}>
@@ -201,11 +316,11 @@ export default class List extends Component {
 
         <div id="list-items">
           {
-            slicedIssues.map(issue => {
+            this.state.issues.map(issue => {
               return <Issue
                 key={issue.id}
                 active={this.props.activeIssue && this.props.activeIssue.id === issue.id}
-                issueClicked={(i) => this.props.issueClicked(i)}
+                issueClicked={(i) => this.issueClicked(i)}
                 issue={issue}/>
             })
           }
