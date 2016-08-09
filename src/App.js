@@ -5,10 +5,12 @@ import Nav from './Nav'
 import List from './List'
 import Main from './Main'
 import APIDialog from './APIDialog'
-import Dexie from 'dexie'
 import { makeExtract } from './Utils'
 import parse from 'parse-link-header'
 import elasticlunr from 'elasticlunr'
+import lf from 'lovefield'
+import getSchema from './Schema'
+import { SLICE_START, SLICE_INCREMENT } from './Constants'
 
 // If you use React Router, make this component
 // render <Router> with your routes. Currently,
@@ -27,12 +29,19 @@ export default class App extends Component {
       projects: [],
       fetching: null,
       // issuesAll: [],
+      issues: [],
       issue: null,
       comments: [],
       showConfig: false,
       showAbout: false,
       ratelimitLimit: 60,
       ratelimitRemaining: 60,
+
+      // for the list
+      selectedProjects: [],
+      slice: SLICE_START,
+      search: '',
+
     }
     this.selectStatus = this.selectStatus.bind(this)
     this.fetchResponseProxy = this.fetchResponseProxy.bind(this)
@@ -40,36 +49,38 @@ export default class App extends Component {
   }
 
   componentWillMount() {
-    console.log('App will mount');
-    this.db = new Dexie('buggy')
-    this.db.version(1).stores({
-      projects: 'id,org,repo,count',
-      issues: 'id,project_id,project,state,title,comments,extract,last_actor,updated_at_ts',
-      comments: 'id,project_id,issue_id,created_at_ts'
-    })
-    this.db.open().catch(error => {
-      console.warn('Unable to open the IndexedDB database');
-      console.error(error);
-    })
+    this.schemaBuilder = getSchema()
+
   }
   componentDidMount() {
-    console.log('Mounting App');
-
-    this.db.projects.toArray().then(results => {
-      if (results.length) {
+    this.schemaBuilder.connect().then(db => {
+      this.db = db
+      this.setState({db: db})
+      let projectsTable = db.getSchema().table('Project');
+      db.select().from(projectsTable).exec().then(results => {
         this.setState({projects: results})
-        // for (var project of results) {
-        //   this.downloadNewIssues(project)
-        // }
-      }
+        for (var project of results) {
+          this.downloadNewIssues(project)
+        }
+      })
+      this.recountStatuses()
+      this.loadIssues()
     })
+    // this.db.projects.toArray().then(results => {
+    //   if (results.length) {
+    //     this.setState({projects: results})
+    //     // for (var project of results) {
+    //     //   this.downloadNewIssues(project)
+    //     // }
+    //   }
+    // })
     // // this.readIssues()
     // this.recountStatuses()
   }
 
   componentWillUnmount() {
     if (this.db) {
-      this.db.close()  // not sure if this is needed but feels good
+      this.db.closeDatabase()  // not sure if this is needed but feels good
     }
   }
 
@@ -84,25 +95,79 @@ export default class App extends Component {
   }
 
   recountStatuses() {
-    this.db.issues
-    .where('state')
-    .equals('open')
-    .count()
-    .then(count => {
+    let table = this.db.getSchema().table('Issue')
+
+    this.db.select(lf.fn.count(table.id)).from(table)
+    .where(table.state.eq('open')).exec().then(results => {
       let counts = this.state.countStatuses
-      counts.open = count
+      counts.open = results[0]['COUNT(id)']
       this.setState({countStatuses: counts})
     })
 
-    this.db.issues
-    .where('state')
-    .equals('closed')
-    .count()
-    .then(count => {
+    this.db.select(lf.fn.count(table.id)).from(table)
+    .where(table.state.eq('closed')).exec().then(results => {
       let counts = this.state.countStatuses
-      counts.closed = count
+      counts.closed = results[0]['COUNT(id)']
       this.setState({countStatuses: counts})
     })
+  }
+
+  loadIssues() {
+    // query the database and set issues in this.state
+    let issues = []
+    let projects = this.state.selectedProjects
+    let search = this.state.search
+    let slice = this.state.slice
+    let offset = this.state.offset || 0
+    // let offset=0
+
+    let projectsTable = this.db.getSchema().table('Project')
+    let table = this.db.getSchema().table('Issue')
+
+    let countQuery = this.db.select(lf.fn.count(table.id))
+    .from(table)
+    .innerJoin(projectsTable, table.project_id.eq(projectsTable.id))
+
+    let query = this.db.select()
+    .from(table)
+    .innerJoin(projectsTable, table.project_id.eq(projectsTable.id))
+
+    if (projects && projects.length) {
+      let projectIds = projects.map(p => p.id)
+      query = query.where(table.project_id.in(projectIds))
+      countQuery = countQuery.where(table.project_id.in(projectIds))
+    }
+
+    if (!slice) {
+      slice = SLICE_START
+    }
+
+
+    // count how many we'd get back if we didn't limit
+    countQuery.exec().then(result => {
+      let count = result[0].Issue['COUNT(id)']
+      this.setState({canLoadMore: count > slice})
+    })
+
+    query = query.limit(slice)
+    if (offset) {
+      query = query.offset(offset)
+    }
+
+    // console.log('QUERY', query);
+    query.orderBy(table.updated_at, lf.Order.DESC).exec().then(results => {
+      let issues = results.map(result => {
+        // mutating the result. Bad idea??
+        result.Issue.project = result.Project
+        return result.Issue
+      })
+      this.setState({
+        issues: issues,
+        searching: false,
+        loadingMore: false,
+      })
+    })
+
   }
 
   // readIssues() {
@@ -140,29 +205,42 @@ export default class App extends Component {
       })
       .then(issues => {
         if (issues) {
-          let rewrapped = issues.map(issue => {
-            return {
-              id: issue.id,
-              project_id: project.id,
-              project: project,
-              state: issue.state,
-              title: issue.title,
-              comments: issue.comments,
-              extract: makeExtract(issue.body),
-              last_actor: null,
-              metadata: issue,
-              updated_at_ts: (new Date(issue.updated_at)).getTime(),
-            }
-          })
-          this.db.issues.bulkPut(rewrapped);
-          // Need to download closed ones too
-          // XXX need to recurse/paginate here
+          // let projectsTable = this.db.getSchema().table('Project')
+          let issuesTable = this.db.getSchema().table('Issue')
+          // this.db.select().from(projectsTable).where(projectsTable.id.eq(project.id)).exec()
+          // .then(projectRow => {
+          //   console.log('projectRow', projectRow);
+
+            let rows = issues.map(issue => {
+              return issuesTable.createRow({
+                id: issue.id,
+                state: issue.state,
+                title: issue.title,
+                updated_at: new Date(issue.updated_at),
+                comments: issue.comments,
+                extract: issue.body,
+                last_actor: null,
+                metadata: issue,
+                project: project,
+                // project: projectRow,
+                project_id: project.id,
+              })
+            })
+
+            return this.db.insertOrReplace().into(issuesTable).values(rows).exec()
+            .then(inserted => {
+              console.log("Inserted...", inserted.length, 'issues for ', project.org, project.repo);
+            })
+
+          // })
+
+          // XXX Need to download closed ones too
         }
       })
-      .catch(err => {
-        console.warn('Unable to download issues from ' + url);
-        console.error(err);
-      })
+      // .catch(err => {
+      //   console.warn('Unable to download issues from ' + url);
+      //   console.error(err);
+      // })
     }
     let url = 'https://api.github.com'
     url += `/repos/${project.org}/${project.repo}/issues`
@@ -181,9 +259,26 @@ export default class App extends Component {
       this.setState({projects: projects})
 
       // save it persistently too
-      this.db.projects.add(project)
-      this.downloadNewIssues(project)
-      .then(this.readIssues)
+      // this.db.projects.add(project)
+      let projectsTable = this.db.getSchema().table('Project')
+      let row = projectsTable.createRow({
+        id: project.id,
+        org: project.org,
+        repo: project.repo,
+        count: project.count,
+        private: project.private,
+      })
+      this.db.insertOrReplace().into(projectsTable).values([row]).exec()
+      .then(inserted => {
+        console.log("Inserted...", inserted.length, 'projects');
+        this.downloadNewIssues(project)
+        .then(() => {
+          if (!this.state.issues.length) {
+            this.loadIssues()
+          }
+        })
+      })
+
     }
 
   }
@@ -201,6 +296,7 @@ export default class App extends Component {
     // })
     this.setState(stateChange)
 
+    throw new Error('work harder')
     this.db.comments
     .where('project_id')
     .equals(project.id)
@@ -220,9 +316,9 @@ export default class App extends Component {
 
   _clearAll(e) {
     e.preventDefault()
-    console.log('CLEAR!!');
     this.db.close()
-    let r = indexedDB.deleteDatabase('buggy')
+    // let r = indexedDB.deleteDatabase('buggy')
+    let r = indexedDB.deleteDatabase('lovebug')
     r.onsuccess = () => {
       alert('All cleared')
       document.location.reload(1)
@@ -247,23 +343,32 @@ export default class App extends Component {
 
   readComments(issue) {
     // XXX Needs an orderBy('created_at_ts')
-    return this.db.comments
-    .where('issue_id')
-    .equals(issue.id)
-    .toArray()
-    .then(comments => {
-      if (comments.length) {
-        let lastComment = comments[comments.length - 1]
-        // console.log(lastComment);
-        issue.extract = makeExtract(lastComment.metadata.body)
-        issue.last_actor = lastComment.metadata.user
-        this.db.issues.put(issue)
-        this.setState({comments: comments})
-      } else {
-        this.setState({comments: []})
-      }
-
+    let issuesTable = this.db.getSchema().table('Issue')
+    let commentsTable = this.db.getSchema().table('Comment')
+    let comments = []
+    return this.db.select().from(commentsTable)
+    .where(commentsTable.issue_id.eq(issue.id))
+    .exec().then(results => {
+      console.log('COmments Results', results);
     })
+
+    // return this.db.comments
+    // .where('issue_id')
+    // .equals(issue.id)
+    // .toArray()
+    // .then(comments => {
+    //   if (comments.length) {
+    //     let lastComment = comments[comments.length - 1]
+    //     // console.log(lastComment);
+    //     issue.extract = makeExtract(lastComment.metadata.body)
+    //     issue.last_actor = lastComment.metadata.user
+    //     this.db.issues.put(issue)
+    //     this.setState({comments: comments})
+    //   } else {
+    //     this.setState({comments: []})
+    //   }
+    //
+    // })
 
   }
 
@@ -271,26 +376,32 @@ export default class App extends Component {
     let url = 'https://api.github.com/'
     url += `repos/${issue.project.org}/${issue.project.repo}/issues/`
     url += `${issue.metadata.number}/comments`
+    // XXX needs pagination
     return fetch(url)
     .then(this.fetchResponseProxy)
     .then(r => r.json())
     .then(comments => {
-      let rewrapped = comments.map(comment => {
+      let commentsTable = this.db.getSchema().table('Comment')
+      let wrapped = comments.map(comment => {
         return {
           id: comment.id,
+          created_at: new Date(comment.created_at),
+          metadata: comment,
           issue_id: issue.id,
           project_id: issue.project.id,
-          metadata: comment,
-          created_at_ts: (new Date(comment.created_at)).getTime(),
+        }
+        // return commentsTable.createRow(wrapped)
+      })
+      // XXX Needs to update the issue's "extract" and "latest_comment" (for avatar)
+
+      let rows = wrapped.map(c => commentsTable.createRow(c))
+      return this.db.insertOrReplace().into(commentsTable).values(rows).exec()
+      .then(inserted => {
+        if (this.state.issue && this.state.issue.id === issue.id) {
+          // this is the current open issue, update the comments state
+          this.readComments(issue)
         }
       })
-      this.db.comments.bulkPut(rewrapped);
-      // Needs to update the issue's "extract" and "latest_comment" (for avatar)
-      // needs pagination
-      if (this.state.issue && this.state.issue.id === issue.id) {
-        // this is the current open issue, update the comments state
-        this.readComments(issue)
-      }
     })
   }
 
@@ -304,18 +415,24 @@ export default class App extends Component {
     .then(this.fetchResponseProxy)
     .then(r => r.json())
     .then(response => {
+
+      let issuesTable = this.db.getSchema().table('Issue')
       let issueWrapped = {
-        id: response.id,
-        project: issue.project,
+        id: issue.id,
         state: response.state,
         title: response.title,
+        updated_at: new Date(response.updated_at),
         comments: response.comments,
-        extract: issue.extract,
-        last_actor: issue.last_actor,
+        extract: response.body,
+        last_actor: null,
         metadata: response,
-        updated_at_ts: (new Date(response.updated_at)).getTime(),
+        project_id: issue.project_id,
       }
-      this.db.issues.put(issueWrapped)
+      var row = issuesTable.createRow(issueWrapped)
+      return this.db.insertOrReplace().into(issuesTable).values([row]).exec()
+      .then(inserted => {
+        return this.updateIssueComments(issue)
+      })
       if (this.state.issue && this.state.issue.id === response.id) {
         // this is the current open issue, update state.
         this.setState({issue: issueWrapped})
@@ -329,13 +446,34 @@ export default class App extends Component {
       //   }
       // })
       // this.setState({issuesAll: issuesAll})
-      return this.updateIssueComments(issue)
+
     })
 
   }
 
   toggleShowConfig() {
     this.setState({showConfig: !this.state.showConfig})
+  }
+
+  increaseSlice() {
+    this.setState({
+      slice: this.state.slice + SLICE_INCREMENT,
+      loadingMore: true,
+    }, this.loadIssues)
+  }
+
+  searchChanged(search) {
+    this.setState({
+      search: search,
+      searching: true
+    }, this.loadIssues)
+  }
+
+  projectsSelected(projects) {
+    this.setState({
+      selectedProjects: projects,
+      searching: true
+    }, this.loadIssues)
   }
 
   render() {
@@ -357,9 +495,15 @@ export default class App extends Component {
           />
         <List
           projectsAll={this.state.projects}
-          activeIssue={this.state.issue}
+          selectedProjects={this.state.selectedProjects}
           issueClicked={i => this.issueClicked(i)}
-          db={this.db}
+          activeIssue={this.state.issue}
+          issues={this.state.issues}
+          increaseSlice={() => this.increaseSlice()}
+          searchChanged={search => this.searchChanged(search)}
+          projectsSelected={projects => this.projectsSelected(projects)}
+          loadingMore={this.state.loadingMore}
+          canLoadMore={this.state.canLoadMore}
           />
         <Main
           projects={this.state.projects}

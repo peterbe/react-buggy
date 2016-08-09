@@ -35,8 +35,8 @@
     "webpack-dev-server": "^1.12.1"
   },
   "dependencies": {
-    "dexie": "1.4.1",
     "elasticlunr": "0.9.0",
+    "lovefield": "2.1.9",
     "marked": "0.3.5",
     "moment": "2.14.1",
     "parse-link-header": "0.4.1",

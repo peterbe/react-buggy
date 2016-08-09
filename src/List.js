@@ -1,13 +1,10 @@
 import React, { Component, PropTypes } from 'react';
 import { ShowProject, RenderMarkdown } from './Common'
-
+import { SLICE_START, SLICE_INCREMENT } from './Constants'
 
 function escapeRegExp(string){
   return string.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, '\\$1');
 }
-
-const SLICE_START = 5
-const SLICE_INCREMENT = 5
 
 
 export default class List extends Component {
@@ -15,71 +12,22 @@ export default class List extends Component {
     projectsAll: PropTypes.array.isRequired,
     issueClicked: PropTypes.func.isRequired,
     activeIssue: PropTypes.object,
-    db: PropTypes.object,
-    // lunrindex: PropTypes.object,
+    issues: PropTypes.array.isRequired,
+    increaseSlice: PropTypes.func.isRequired,
+    searchChanged: PropTypes.func.isRequired,
+    projectsSelected: PropTypes.func.isRequired,
+    loadingMore: PropTypes.bool,
+    canLoadMore: PropTypes.bool,
   }
 
   constructor(props) {
     super(props)
 
     this.state = {
-      selectedProjects: [],
       showProjects: false,
-      issues: [],
-      search: '',
-      // offsets: {},
-      slice: SLICE_START,
-      loadingMore: false,
-      canLoadMore: false,
-      // activeIssue: null,
     }
 
     this.handleListScroll = this.handleListScroll.bind(this)
-  }
-
-  componentDidMount() {
-    console.log('List mounted!');
-
-    this.loadIssues()
-
-    // XXX call this.updateLunr()??
-    // let offsets = this.state.offsets
-    // let offsetsKey = ''
-    // if (this.state.selectedProjects.length) {
-    //   offsetsKey = this.state.selectedProjects.map(p => p.id).join('.')
-    // }
-    // offsetsKey += 'search:' + this.state.search
-    //
-    // console.log('OFFSETS', offsets);
-    // console.log('OFFSETSKEY', offsetsKey);
-    // // let offset = this.state.offsets
-
-  }
-
-  loadIssues() {
-    let dbPromise = this.props.db.issues
-
-    if (this.state.selectedProjects.length) {
-      console.log(this.state.selectedProjects);
-      // console.log('dbPromise',dbPromise);
-      dbPromise = dbPromise.where('project_id').anyOf(
-        this.state.selectedProjects.map(p => p.id)
-      )
-    }
-
-    // dbPromise.count().then(count => {
-    //   console.log('Count', count);
-    //   this.setState({canLoadMore: count > this.state.slice})
-    // })
-
-    dbPromise
-    .reverse()
-    .sortBy('updated_at_ts')
-    .then(issues => {
-      this.setState({issues: issues})
-    })
-    // .orderBy('updated_at_ts').reverse()
-
   }
 
   handleListScroll(event) {
@@ -90,113 +38,59 @@ export default class List extends Component {
       let rect = document.querySelector('#list-items').getBoundingClientRect()
       let height = document.querySelector('#list-items').innerHeight
       let nearBottom = (rect.bottom - 200) <= innerHeight
-      if (nearBottom && this.state.canLoadMore) {
-        this.increaseSlice()
+      if (nearBottom && this.props.canLoadMore) {
+        this.props.increaseSlice()
       }
     }, 200)
   }
 
-  updateLunr() {
-    let t0=performance.now()
-    this.lunrindex = elasticlunr(function() {
-      this.addField('title')
-      this.addField('body')
-      this.addField('type')
-      this.addField('issue_id')
-      this.addField('project_id')
-      this.setRef('id')
-      // not store the original JSON document to reduce the index size
-      this.saveDocument(false)
-    })
+  // updateLunr() {
+  //   let t0=performance.now()
+  //   this.lunrindex = elasticlunr(function() {
+  //     this.addField('title')
+  //     this.addField('body')
+  //     this.addField('type')
+  //     this.addField('issue_id')
+  //     this.addField('project_id')
+  //     this.setRef('id')
+  //     // not store the original JSON document to reduce the index size
+  //     this.saveDocument(false)
+  //   })
+  //
+  //   this.state.issuesAll.forEach(issue => {
+  //     this.lunrindex.addDoc({
+  //       id: issue.id,
+  //       title: issue.title,
+  //       body: issue.metadata.body,
+  //       type: 'ISSUE',
+  //       issue_id: issue.id,
+  //       project_id: issue.project.id
+  //     })
+  //   })
+  //   let t1=performance.now()
+  //   console.log('THAT TOOK ' + (t1 - t0)/ 1000);
+  //   // console.log('READ', issues.length, 'issues');
+  // }
 
-    this.state.issuesAll.forEach(issue => {
-      this.lunrindex.addDoc({
-        id: issue.id,
-        title: issue.title,
-        body: issue.metadata.body,
-        type: 'ISSUE',
-        issue_id: issue.id,
-        project_id: issue.project.id
-      })
-    })
-    let t1=performance.now()
-    console.log('THAT TOOK ' + (t1 - t0)/ 1000);
-    // console.log('READ', issues.length, 'issues');
-  }
-
-  downloadNewIssues(project) {
-    // Download all open and closed issues we can find for this
-    // project.
-
-    let maxDeepFetches = 20
-    let deepFetches = 0
-    const downloadIssues = (url) => {
-      return fetch(url)
-      .then(this.fetchResponseProxy)
-      .then(r => {
-        if (r.status === 200) {
-          if (r.headers.get('Link') && deepFetches >= maxDeepFetches) {
-            console.warn(
-              'NOTE! Downloaded ' + maxDeepFetches + 'pages but could go on'
-            )
-          }
-          if (r.headers.get('Link') && deepFetches < maxDeepFetches) {
-            let parsedLink = parse(r.headers.get('Link'))
-            if (parsedLink.next) {
-              deepFetches++
-              downloadIssues(parsedLink.next.url)
-            }
-          }
-          return r.json()
-        }
-      })
-      .then(issues => {
-        if (issues) {
-          let rewrapped = issues.map(issue => {
-            return {
-              id: issue.id,
-              project_id: project.id,
-              project: project,
-              state: issue.state,
-              title: issue.title,
-              comments: issue.comments,
-              extract: makeExtract(issue.body),
-              last_actor: null,
-              metadata: issue,
-              updated_at_ts: (new Date(issue.updated_at)).getTime(),
-            }
-          })
-          this.db.issues.bulkPut(rewrapped);
-          // Need to download closed ones too
-          // XXX need to recurse/paginate here
-        }
-      })
-      .catch(err => {
-        console.warn('Unable to download issues from ' + url);
-        console.error(err);
-      })
-    }
-    let url = 'https://api.github.com'
-    url += `/repos/${project.org}/${project.repo}/issues`
-    return downloadIssues(url)
-
-  }
 
   selectProject(event, project) {
     event.preventDefault()
     if (project === 'ALL') {
-      this.setState({selectedProjects: []})
+      this.props.projectsSelected([])
     } else {
-      let selected = this.state.selectedProjects
+      let selected = this.props.selectedProjects
       // push or filter?
       if (selected.find(p => p.id === project.id)) {
         selected = selected.filter(p => p.id !== project.id)
       } else {
         selected.push(project)
       }
-      this.setState({selectedProjects: selected, showProjects: false})
-      this.loadIssues()
+      this.props.projectsSelected(selected)
+      // this.setState({selectedProjects: selected, showProjects: false})
+
+      // this.loadIssues()
     }
+    this.setState({showProjects: false})
   }
 
   toggleShowProjects() {
@@ -205,35 +99,35 @@ export default class List extends Component {
 
   clearSearch() {
     this.refs.search.value = ''
-    this.setState({search: ''})
-    this.loadIssues()
+    this.props.searchChanged('')
+    // this.loadIssues()
     // this.props.refreshFiltering()
   }
 
   search() {
+    // XXX consider this kinda throttle https://www.sitepoint.com/throttle-scroll-events/
     // throttle this change
     if (this.searchThrottleTimer) {
       clearTimeout(this.searchThrottleTimer)
     }
     this.searchThrottleTimer = setTimeout(() => {
       console.log('Searching for...:', this.refs.search.value.trim());
-      this.setState({search: this.refs.search.value.trim()})
-      this.loadIssues()
+      let search = this.refs.search.value.trim()
+      this.props.searchChanged(search)
+      // this.setState({search: search})
+      // this.loadIssues()
     }, 500)
   }
 
   submitSearchForm(event) {
     event.preventDefault()
-  }
-
-  increaseSlice() {
-    this.setState({slice: this.state.slice + SLICE_INCREMENT})
-    this.loadIssues()
+    // XXX ignoring timers, should this send the final value to
+    // this.props.searchChanged()??
   }
 
   clickLoadMore(event) {
     event.preventDefault()
-    this.increaseSlice()
+    this.props.increaseSlice()
   }
 
   issueClicked(issue) {
@@ -243,7 +137,7 @@ export default class List extends Component {
 
   render() {
     let totalCount = this.props.projectsAll.reduce((agg, p) => agg + p.count, 0)
-    let allClassName = this.state.selectedProjects.length ? '' : 'selected'
+    let allClassName = this.props.selectedProjects.length ? '' : 'selected'
 
     let formButton = null
     if (this.state.search) {
@@ -256,7 +150,7 @@ export default class List extends Component {
       )
     } else {
       let filterClassName = 'pure-button button-small'
-      if (this.state.selectedProjects.length) {
+      if (this.props.selectedProjects.length) {
         filterClassName += ' has-filters'
       }
       formButton = (
@@ -273,8 +167,8 @@ export default class List extends Component {
             { this.state.showProjects ? 'Close' : 'Filter' }
             {' '}
             {
-              this.state.selectedProjects.length ?
-              <span>({this.state.selectedProjects.length})</span> : null
+              this.props.selectedProjects.length ?
+              <span>({this.props.selectedProjects.length})</span> : null
             }
         </button>
       )
@@ -291,7 +185,7 @@ export default class List extends Component {
             {
               this.props.projectsAll.map(project => {
                 let className = ''
-                if (this.state.selectedProjects.find(p => p.id === project.id)) {
+                if (this.props.selectedProjects.find(p => p.id === project.id)) {
                   className = 'selected'
                 }
                 return (
@@ -340,8 +234,8 @@ export default class List extends Component {
 
     // let slicedIssues = issues.slice(0, this.state.slice)
     // let canLoadMore = this.state.slice < issues.length
-    let canLoadMore = this.state.canLoadMore
-
+    // let canLoadMore = this.props.canLoadMore
+    let { canLoadMore, issues, loadingMore } = this.props
     return (
       <div className="pure-u-1" id="list" onScroll={this.handleListScroll}>
         <div id="list-options">
@@ -362,7 +256,7 @@ export default class List extends Component {
 
         <div id="list-items">
           {
-            this.state.issues.map(issue => {
+            issues.map(issue => {
               return <Issue
                 key={issue.id}
                 active={this.props.activeIssue && this.props.activeIssue.id === issue.id}
@@ -384,8 +278,12 @@ export default class List extends Component {
               <a href="#">Reset</a>
             </p>
           </div>{/* /email-item */}
-
-          { canLoadMore ?
+          { loadingMore ? <div className="email-item">
+            <p className="loading">
+              Loading more...
+            </p>
+          </div> : null}
+          { canLoadMore && !loadingMore ?
             <div className="email-item">
               <p>
                 Limited to the {this.state.slice} most recently changed.<br/>

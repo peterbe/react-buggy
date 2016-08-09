@@ -12,14 +12,12 @@ export default class Nav extends Component {
   }
   constructor(props) {
     super(props);
-    // this.state = { counter: 0 };
     this.clickStatus = this.clickStatus.bind(this)
   }
 
   clickStatus(event, status) {
     event.preventDefault()
     this.props.selectStatus(status)
-    // console.log('B', b);
   }
 
   toggleShowConfig(event) {
@@ -32,6 +30,8 @@ export default class Nav extends Component {
       countStatuses,
       selectedStatuses
     } = this.props
+    let all = countStatuses.open + countStatuses.closed
+
     return (
       <div className="pure-u" id="nav">
         <a href="#" className="nav-menu-button">Menu</a>
@@ -44,7 +44,7 @@ export default class Nav extends Component {
                   <StatusLink
                     clickStatus={this.clickStatus}
                     status={'all'}
-                    count={countStatuses.all} />
+                    count={all} />
                 </li>
                 <li className="label">
                   <StatusLink

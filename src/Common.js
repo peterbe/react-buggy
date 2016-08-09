@@ -26,6 +26,10 @@ export const ShowProject = ({ project }) => {
 }
 
 export const RenderMarkdown = ({ text }) => {
+  if (typeof text === 'undefined') {
+    throw new Error('text should not be undefined!')
+  }
+  text = text || ''  // it might be null
   let rendered = {__html: marked(text)}
   return <div className="markdown" dangerouslySetInnerHTML={rendered}></div>
 }

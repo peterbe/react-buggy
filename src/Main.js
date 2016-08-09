@@ -23,7 +23,7 @@ export default class Main extends Component {
   }
 
   componentDidMount() {
-    console.log("PROJETS", this.props.projects);
+    // console.log("PROJETS", this.props.projects);
   }
 
   // tick() {
