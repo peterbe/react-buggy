@@ -132,6 +132,9 @@ export default class List extends Component {
 
   issueClicked(issue) {
     // this.setState({activeIssue: issue})
+    if (this.state.showProjects) {
+      this.setState({showProjects: false})
+    }
     this.props.issueClicked(issue)
   }
 
@@ -305,6 +308,10 @@ const Issue = ({ issue, issueClicked, active }) => {
   if (active) {
     className += ' email-item-active'
   }
+  let extract = issue.extract
+  if (!extract) {
+    extract = issue.metadata.body
+  }
   return (
     <div
       className={className}
@@ -362,7 +369,7 @@ const Issue = ({ issue, issueClicked, active }) => {
           }
         </p>
         <div className="extract">
-          <RenderMarkdown text={issue.extract}/>
+          <RenderMarkdown text={extract}/>
         </div>
 
       </div>

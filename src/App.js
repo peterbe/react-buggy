@@ -142,7 +142,6 @@ export default class App extends Component {
       slice = SLICE_START
     }
 
-
     // count how many we'd get back if we didn't limit
     countQuery.exec().then(result => {
       let count = result[0].Issue['COUNT(id)']
@@ -155,7 +154,7 @@ export default class App extends Component {
     }
 
     // console.log('QUERY', query);
-    query.orderBy(table.updated_at, lf.Order.DESC).exec().then(results => {
+    return query.orderBy(table.updated_at, lf.Order.DESC).exec().then(results => {
       let issues = results.map(result => {
         // mutating the result. Bad idea??
         result.Issue.project = result.Project
@@ -165,10 +164,11 @@ export default class App extends Component {
         issues: issues,
         searching: false,
         loadingMore: false,
-      })
+      }, this.updateIssueCommentsByLoaded)
     })
 
   }
+
 
   // readIssues() {
   //   return this.db.issues.orderBy('updated_at_ts').reverse().toArray().then(issues => {
@@ -218,7 +218,7 @@ export default class App extends Component {
                 title: issue.title,
                 updated_at: new Date(issue.updated_at),
                 comments: issue.comments,
-                extract: issue.body,
+                extract: null,
                 last_actor: null,
                 metadata: issue,
                 project: project,
@@ -273,9 +273,9 @@ export default class App extends Component {
         console.log("Inserted...", inserted.length, 'projects');
         this.downloadNewIssues(project)
         .then(() => {
-          if (!this.state.issues.length) {
-            this.loadIssues()
-          }
+          // if (!this.state.issues.length) {
+          this.loadIssues()
+          // }
         })
       })
 
@@ -334,72 +334,131 @@ export default class App extends Component {
   issueClicked(issue) {
     this.setState({issue: issue, showConfig: false})
     this.refreshIssue(issue)
-    // this.readComments(issue).then(() => {
-    //   this.updateIssueComments(issue).then(() => {
-    //     this.readComments(issue)
-    //   })
-    // })
   }
 
   readComments(issue) {
-    // XXX Needs an orderBy('created_at_ts')
-    let issuesTable = this.db.getSchema().table('Issue')
-    let commentsTable = this.db.getSchema().table('Comment')
+    // console.log('HERE in readComments', issue.title);
     let comments = []
-    return this.db.select().from(commentsTable)
-    .where(commentsTable.issue_id.eq(issue.id))
-    .exec().then(results => {
-      console.log('COmments Results', results);
-    })
+    let table = this.db.getSchema().table('Comment')
 
-    // return this.db.comments
-    // .where('issue_id')
-    // .equals(issue.id)
-    // .toArray()
-    // .then(comments => {
-    //   if (comments.length) {
-    //     let lastComment = comments[comments.length - 1]
-    //     // console.log(lastComment);
-    //     issue.extract = makeExtract(lastComment.metadata.body)
-    //     issue.last_actor = lastComment.metadata.user
-    //     this.db.issues.put(issue)
-    //     this.setState({comments: comments})
-    //   } else {
-    //     this.setState({comments: []})
-    //   }
-    //
+    // let countQuery = this.db.select(lf.fn.count(table.id))
+    // .from(table)
+    // .where(table.issue_id.eq(issue.id))
+
+    let query = this.db.select().from(table)
+    .where(table.issue_id.eq(issue.id))
+
+    // countQuery.exec().then(result => {
+    //   let count = result[0]['COUNT(id)']
+    //   console.log('# comments', count);
     // })
+
+    return query.orderBy(table.created_at, lf.Order.ASC).exec().then(results => {
+      // console.log('RESULTS', results);
+      let comments = results.map(result => {
+        return result
+      })
+      this.setState({
+        comments: comments,
+        loadingMoreComments: false,
+      })
+    })
 
   }
 
+  updateIssueCommentsByLoaded() {
+    // Similar to updateIssueComments() but run it for all issues loaded
+    // but only those who have no (last_actor & extract) but supposedly
+    // has comments.
+    this.state.issues.map(issue => {
+      if (issue.comments && (!issue.last_actor || !issue.extract)) {
+        this.updateIssueComments(issue).then(() => {
+          // console.log('Updated issue comments for ', issue.title);
+        })
+      }
+    })
+  }
+
   updateIssueComments(issue) {
+
+    let maxDeepFetches = 20
+    let deepFetches = 0
+    const downloadComments = (url) => {
+      return fetch(url)
+      .then(this.fetchResponseProxy)
+      .then(r => {
+        if (r.headers.get('Link') && deepFetches >= maxDeepFetches) {
+          console.warn(
+            'NOTE! Downloaded ' + maxDeepFetches + 'pages but could go on'
+          )
+        }
+        if (r.headers.get('Link') && deepFetches < maxDeepFetches) {
+          let parsedLink = parse(r.headers.get('Link'))
+          if (parsedLink.next) {
+            deepFetches++
+            downloadComments(parsedLink.next.url)
+          }
+        }
+        return r.json()
+      })
+      .then(comments => {
+
+        let commentsTable = this.db.getSchema().table('Comment')
+        let wrapped = comments.map(comment => {
+          return {
+            id: comment.id,
+            created_at: new Date(comment.created_at),
+            metadata: comment,
+            issue_id: issue.id,
+            project_id: issue.project.id,
+          }
+          // return commentsTable.createRow(wrapped)
+        })
+
+        let rows = wrapped.map(c => commentsTable.createRow(c))
+        return this.db.insertOrReplace().into(commentsTable).values(rows).exec()
+        .then(inserted => {
+          console.log('Inserted... #', inserted.length, 'comments');
+          if (inserted.length) {
+            this.updateIssueLastComment(inserted[inserted.length - 1])
+          }
+          if (this.state.issue && this.state.issue.id === issue.id) {
+            // this is the current open issue, update the comments state
+            this.readComments(issue)
+          }
+        })
+      })
+    }
     let url = 'https://api.github.com/'
     url += `repos/${issue.project.org}/${issue.project.repo}/issues/`
     url += `${issue.metadata.number}/comments`
-    // XXX needs pagination
-    return fetch(url)
-    .then(this.fetchResponseProxy)
-    .then(r => r.json())
-    .then(comments => {
-      let commentsTable = this.db.getSchema().table('Comment')
-      let wrapped = comments.map(comment => {
-        return {
-          id: comment.id,
-          created_at: new Date(comment.created_at),
-          metadata: comment,
-          issue_id: issue.id,
-          project_id: issue.project.id,
-        }
-        // return commentsTable.createRow(wrapped)
-      })
-      // XXX Needs to update the issue's "extract" and "latest_comment" (for avatar)
+    return downloadComments(url)
+  }
 
-      let rows = wrapped.map(c => commentsTable.createRow(c))
-      return this.db.insertOrReplace().into(commentsTable).values(rows).exec()
-      .then(inserted => {
-        if (this.state.issue && this.state.issue.id === issue.id) {
-          // this is the current open issue, update the comments state
-          this.readComments(issue)
+  updateIssueLastComment(comment) {
+    let issuesTable = this.db.getSchema().table('Issue')
+    let projectsTable = this.db.getSchema().table('Project')
+    this.db.select().from(issuesTable)
+    .innerJoin(projectsTable, issuesTable.project_id.eq(projectsTable.id))
+    .where(issuesTable.id.eq(comment.issue_id)).exec().then(results => {
+      let issue = results[0].Issue
+      issue.project = results[0].Project
+      issue.extract = makeExtract(comment.metadata.body)
+      issue.last_actor = comment.metadata.user
+      let row = issuesTable.createRow(issue)
+      this.db.insertOrReplace().into(issuesTable).values([row]).exec()
+      .then(updated => {
+        let found = false
+        let issues = this.state.issues.map(i => {
+          if (i.id === issue.id) {
+            found = true
+            return issue
+          } else {
+            return i
+          }
+        })
+        if (found) {
+          this.setState({issues: issues})
         }
       })
     })
@@ -423,8 +482,8 @@ export default class App extends Component {
         title: response.title,
         updated_at: new Date(response.updated_at),
         comments: response.comments,
-        extract: response.body,
-        last_actor: null,
+        extract: issue.extract,
+        last_actor: issue.last_actor,
         metadata: response,
         project_id: issue.project_id,
       }
@@ -437,16 +496,6 @@ export default class App extends Component {
         // this is the current open issue, update state.
         this.setState({issue: issueWrapped})
       }
-      // // let's also update the list of all issues
-      // let issuesAll = this.state.issuesAll.map(i => {
-      //   if (i.id === issueWrapped.id) {
-      //     return issueWrapped
-      //   } else {
-      //     return i
-      //   }
-      // })
-      // this.setState({issuesAll: issuesAll})
-
     })
 
   }

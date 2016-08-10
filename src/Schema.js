@@ -52,6 +52,8 @@ const getSchema = () => {
     action: lf.ConstraintAction.CASCADE
   })
   .addPrimaryKey(['id'])
+  .addIndex('idxIssueId', ['issue_id'])
+  .addIndex('idxCreatedAt', ['created_at'], false, lf.Order.ASC)
 
   return schema
 }

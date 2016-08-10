@@ -324,10 +324,11 @@ class Issue extends Component {
         </div>
 
         {
-          comments.map(comment => {
+          comments.map((comment, i) => {
             return <Comment
                 comment={comment.metadata}
                 key={comment.id}
+                index={i}
                 />
           })
         }
@@ -352,7 +353,7 @@ const ShowDescription = ({ body }) => {
 }
 
 
-const Comment = ({ comment }) => {
+const Comment = ({ comment, index }) => {
   return (
     <div className="email-content-body">
       <div className="pure-u">
@@ -367,6 +368,8 @@ const Comment = ({ comment }) => {
           <a href={comment.html_url} target="_blank">
             <Datetime date={comment.created_at} />
           </a>
+          {' '}
+          <small style={{opacity:0.6}}>(comment #{index+1})</small>
         </p>
         <RenderMarkdown text={comment.body}/>
       </div>
