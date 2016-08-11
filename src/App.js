@@ -64,18 +64,19 @@ export default class App extends Component {
         }
       })
       this.recountStatuses()
-      this.loadIssues()
+      this.loadIssues().then(() => {
+        let activeissueId = sessionStorage.getItem('activeissue')
+        if (activeissueId) {
+          this.state.issues.forEach(issue => {
+            // equality solves the problem of comparing an in with a string
+            if (issue.id == activeissueId) {
+              this.issueClicked(issue)
+            }
+          })
+        }
+      })
     })
-    // this.db.projects.toArray().then(results => {
-    //   if (results.length) {
-    //     this.setState({projects: results})
-    //     // for (var project of results) {
-    //     //   this.downloadNewIssues(project)
-    //     // }
-    //   }
-    // })
-    // // this.readIssues()
-    // this.recountStatuses()
+
   }
 
   componentWillUnmount() {
@@ -116,6 +117,7 @@ export default class App extends Component {
     // query the database and set issues in this.state
     let issues = []
     let projects = this.state.selectedProjects
+    let statuses = this.state.selectedStatuses
     let search = this.state.search
     let slice = this.state.slice
     let offset = this.state.offset || 0
@@ -136,6 +138,14 @@ export default class App extends Component {
       let projectIds = projects.map(p => p.id)
       query = query.where(table.project_id.in(projectIds))
       countQuery = countQuery.where(table.project_id.in(projectIds))
+    }
+
+    if (statuses && statuses.length) {
+      if (statuses === ['assigned']) {
+        throw new Error('work harder')
+      }
+      query = query.where(table.state.in(statuses))
+      countQuery = countQuery.where(table.state.in(statuses))
     }
 
     if (!slice) {
@@ -249,7 +259,11 @@ export default class App extends Component {
   }
 
   selectStatus(status) {
-    console.log('STATUS', status)
+    if (status == 'all') {
+      this.setState({selectedStatuses: []}, this.loadIssues)
+    } else {
+      this.setState({selectedStatuses: [status]}, this.loadIssues)
+    }
   }
 
   addProject(project) {
@@ -334,6 +348,7 @@ export default class App extends Component {
   issueClicked(issue) {
     this.setState({issue: issue, showConfig: false})
     this.refreshIssue(issue)
+
   }
 
   readComments(issue) {
@@ -525,6 +540,13 @@ export default class App extends Component {
     }, this.loadIssues)
   }
 
+  statusesSelected(statuses) {
+    this.setState({
+      selectedStatuses: statuses,
+      searching: true
+    }, this.loadIssues)
+  }
+
   render() {
     return (
       <Layout>
@@ -545,12 +567,15 @@ export default class App extends Component {
         <List
           projectsAll={this.state.projects}
           selectedProjects={this.state.selectedProjects}
+          selectedStatuses={this.state.selectedStatuses}
+          search={this.state.search}
           issueClicked={i => this.issueClicked(i)}
           activeIssue={this.state.issue}
           issues={this.state.issues}
           increaseSlice={() => this.increaseSlice()}
           searchChanged={search => this.searchChanged(search)}
           projectsSelected={projects => this.projectsSelected(projects)}
+          statusesSelected={statuses => this.statusesSelected(statuses)}
           loadingMore={this.state.loadingMore}
           canLoadMore={this.state.canLoadMore}
           />

@@ -10,14 +10,18 @@ function escapeRegExp(string){
 export default class List extends Component {
   static propTypes = {
     projectsAll: PropTypes.array.isRequired,
+    search: PropTypes.string.isRequired,
     issueClicked: PropTypes.func.isRequired,
     activeIssue: PropTypes.object,
     issues: PropTypes.array.isRequired,
     increaseSlice: PropTypes.func.isRequired,
     searchChanged: PropTypes.func.isRequired,
     projectsSelected: PropTypes.func.isRequired,
+    statusesSelected: PropTypes.func.isRequired,
     loadingMore: PropTypes.bool,
     canLoadMore: PropTypes.bool,
+    selectedProjects: PropTypes.array.isRequired,
+    selectedStatuses: PropTypes.array.isRequired,
   }
 
   constructor(props) {
@@ -28,6 +32,8 @@ export default class List extends Component {
     }
 
     this.handleListScroll = this.handleListScroll.bind(this)
+    this.resetSelectedProjects = this.resetSelectedProjects.bind(this)
+    this.resetSelectedStatuses = this.resetSelectedStatuses.bind(this)
   }
 
   handleListScroll(event) {
@@ -136,6 +142,17 @@ export default class List extends Component {
       this.setState({showProjects: false})
     }
     this.props.issueClicked(issue)
+    window.sessionStorage.setItem('activeissue', issue.id)
+  }
+
+  resetSelectedProjects(event) {
+    event.preventDefault()
+    this.props.projectsSelected([])
+  }
+
+  resetSelectedStatuses(event) {
+    event.preventDefault()
+    this.props.statusesSelected([])
   }
 
   render() {
@@ -239,6 +256,40 @@ export default class List extends Component {
     // let canLoadMore = this.state.slice < issues.length
     // let canLoadMore = this.props.canLoadMore
     let { canLoadMore, issues, loadingMore } = this.props
+
+    let filteredTooMuch = null
+    if (!issues.length) {
+      filteredTooMuch = (
+        <div className="email-item">
+          <p>Filtered too much?</p>
+          { this.props.search.length ?
+          <p>Matching only: <code>{this.props.search}</code>.
+            <a href="#" onClick={this.resetSearch}>Reset search</a>
+          </p> : null }
+          { this.props.selectedProjects.length ?
+          <p>
+            You've filtered by: <br/>
+            {
+              this.props.selectedProjects.map(p => {
+                return <b key={p.id}>{p.org}/{p.repo}{' '}</b>
+              })
+            }
+
+            <a href="#" onClick={this.resetSelectedProjects}>Reset</a>
+          </p> : null }
+          { this.props.selectedStatuses.length ?
+          <p>
+            Only showing: <br/>
+            {
+              this.props.selectedStatuses.map(s => {
+                return <b key={s}>{s}{' '}</b>
+              })
+            }
+            <a href="#" onClick={this.resetSelectedStatuses}>Reset</a>
+          </p> : null }
+        </div>
+      )
+    }
     return (
       <div className="pure-u-1" id="list" onScroll={this.handleListScroll}>
         <div id="list-options">
@@ -267,20 +318,8 @@ export default class List extends Component {
                 issue={issue}/>
             })
           }
-          <div className="email-item">
-            <p>Filtered too much?</p>
-            <p>Matching only: <code>search</code>.
-              <a href="#">Reset</a>
-            </p>
-            <p>
-              You've filtered by: <br/> <b>*projects</b>.
-              <a href="#">Reset</a>
-            </p>
-            <p>
-              Only showing: <br/> <b>*status*</b>.
-              <a href="#">Reset</a>
-            </p>
-          </div>{/* /email-item */}
+          {filteredTooMuch}
+
           { loadingMore ? <div className="email-item">
             <p className="loading">
               Loading more...
@@ -300,6 +339,8 @@ export default class List extends Component {
    );
   }
 }
+
+
 
 
 const Issue = ({ issue, issueClicked, active }) => {
