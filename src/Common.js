@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 import marked from 'marked'
 
+
 marked.setOptions({
   renderer: new marked.Renderer(),
   gfm: true,
@@ -30,6 +31,25 @@ export const RenderMarkdown = ({ text }) => {
     throw new Error('text should not be undefined!')
   }
   text = text || ''  // it might be null
-  let rendered = {__html: marked(text)}
+  text = marked(text)
+  let rendered = {__html: text}
   return <div className="markdown" dangerouslySetInnerHTML={rendered}></div>
+}
+
+
+function escapeRegExp(str) {
+  return str.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&");
+}
+function highlightText(text, terms) {
+  terms = terms.map(escapeRegExp);
+  var re = new RegExp('\\b((' + terms.join('|') + ')[\\S\'`]*)', 'gi');
+  return text.replace(re, '<b>$1</b>');
+}
+
+export const RenderHighlight = ({ text, terms }) => {
+  text = text.replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+  text = highlightText(text, terms)
+  let rendered = {__html: text}
+  return <span dangerouslySetInnerHTML={rendered}></span>
+
 }

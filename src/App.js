@@ -75,6 +75,7 @@ export default class App extends Component {
           })
         }
       })
+      this.loadLunr()
     })
 
   }
@@ -123,6 +124,39 @@ export default class App extends Component {
     let offset = this.state.offset || 0
     // let offset=0
 
+
+    let searchScores = null
+    let issueIds = null
+    if (search) {
+      // find the Ids
+      let t0 = performance.now()
+      let res = this.lunrindex.search(search, {
+        fields: {
+          title: {boost: 2},
+          body: {boost: 1}
+        },
+        expand: true,
+      })
+      let t1 = performance.now()
+      console.log("Took", (t1 - t0) / 1000, 'ms to find ', res.length, 'issues');
+      searchScores = {}
+      issueIds = res.map(res => {
+        let issueId = parseInt(res.ref, 10)
+        searchScores[issueId] = res.score
+        return issueId
+      })
+      console.log('FOUND', issueIds.length, 'issues');
+      if (!issueIds.length) {
+        // exit early!
+        this.setState({
+          issues: [],
+          searching: false,
+          loadingMore: false
+        })
+        return
+      }
+    }
+
     let projectsTable = this.db.getSchema().table('Project')
     let table = this.db.getSchema().table('Issue')
 
@@ -134,6 +168,10 @@ export default class App extends Component {
     .from(table)
     .innerJoin(projectsTable, table.project_id.eq(projectsTable.id))
 
+    if (issueIds) {
+      query = query.where(table.id.in(issueIds))
+      countQuery = countQuery.where(table.id.in(issueIds))
+    }
     if (projects && projects.length) {
       let projectIds = projects.map(p => p.id)
       query = query.where(table.project_id.in(projectIds))
@@ -157,19 +195,36 @@ export default class App extends Component {
       let count = result[0].Issue['COUNT(id)']
       this.setState({canLoadMore: count > slice})
     })
-
-    query = query.limit(slice)
-    if (offset) {
-      query = query.offset(offset)
+    if (!searchScores) {
+      query = query.limit(slice)
+      if (offset) {
+        query = query.offset(offset)
+      }
+      query = query.orderBy(table.updated_at, lf.Order.DESC)
     }
-
     // console.log('QUERY', query);
-    return query.orderBy(table.updated_at, lf.Order.DESC).exec().then(results => {
+    return query.exec().then(results => {
       let issues = results.map(result => {
         // mutating the result. Bad idea??
         result.Issue.project = result.Project
         return result.Issue
       })
+      if (searchScores) {
+        issues.sort((a, b) => {
+          let sa = searchScores[a.id]
+          let sb = searchScores[b.id]
+          if (sa > sb) {
+            return -1
+          } else if (sb > sa) {
+            return 1
+          }
+          if (a.updated_at.getTime() > b.updated_at.getTime()) {
+            return -1
+          }
+          return 1
+        })
+        issues = issues.slice(0, slice)
+      }
       this.setState({
         issues: issues,
         searching: false,
@@ -179,13 +234,33 @@ export default class App extends Component {
 
   }
 
+  loadLunr() {
+    let t0=performance.now()
+    this.lunrindex = elasticlunr(function() {
+      this.addField('title')
+      this.addField('body')
+      this.addField('type')
+      this.setRef('id')
+      // not store the original JSON document to reduce the index size
+      this.saveDocument(false)
+    })
 
-  // readIssues() {
-  //   return this.db.issues.orderBy('updated_at_ts').reverse().toArray().then(issues => {
-  //     this.setState({issuesAll: issues})
-  //     this.updateLunr()
-  //   })
-  // }
+    let table = this.db.getSchema().table('Issue')
+    let query = this.db.select().from(table)
+    query.exec().then(results => {
+      results.forEach(issue => {
+        this.lunrindex.addDoc({
+          id: issue.id,
+          title: issue.title,
+          body: issue.metadata.body,
+          type: 'ISSUE',
+        })
+      })
+      let t1=performance.now()
+      console.log('THAT TOOK ' + (t1 - t0)/ 1000);
+    })
+
+  }
 
   downloadNewIssues(project) {
     // Download all open and closed issues we can find for this
@@ -414,34 +489,36 @@ export default class App extends Component {
             downloadComments(parsedLink.next.url)
           }
         }
-        return r.json()
+        if (r.status === 200) {
+          return r.json()
+        }
       })
       .then(comments => {
+        if (comments) {
+          let commentsTable = this.db.getSchema().table('Comment')
+          let wrapped = comments.map(comment => {
+            return {
+              id: comment.id,
+              created_at: new Date(comment.created_at),
+              metadata: comment,
+              issue_id: issue.id,
+              project_id: issue.project.id,
+            }
+          })
 
-        let commentsTable = this.db.getSchema().table('Comment')
-        let wrapped = comments.map(comment => {
-          return {
-            id: comment.id,
-            created_at: new Date(comment.created_at),
-            metadata: comment,
-            issue_id: issue.id,
-            project_id: issue.project.id,
-          }
-          // return commentsTable.createRow(wrapped)
-        })
-
-        let rows = wrapped.map(c => commentsTable.createRow(c))
-        return this.db.insertOrReplace().into(commentsTable).values(rows).exec()
-        .then(inserted => {
-          console.log('Inserted... #', inserted.length, 'comments');
-          if (inserted.length) {
-            this.updateIssueLastComment(inserted[inserted.length - 1])
-          }
-          if (this.state.issue && this.state.issue.id === issue.id) {
-            // this is the current open issue, update the comments state
-            this.readComments(issue)
-          }
-        })
+          let rows = wrapped.map(c => commentsTable.createRow(c))
+          return this.db.insertOrReplace().into(commentsTable).values(rows).exec()
+          .then(inserted => {
+            console.log('Inserted... #', inserted.length, 'comments');
+            if (inserted.length) {
+              this.updateIssueLastComment(inserted[inserted.length - 1])
+            }
+            if (this.state.issue && this.state.issue.id === issue.id) {
+              // this is the current open issue, update the comments state
+              this.readComments(issue)
+            }
+          })
+        }
       })
     }
     let url = 'https://api.github.com/'
@@ -527,6 +604,7 @@ export default class App extends Component {
   }
 
   searchChanged(search) {
+    console.log('Search Changed:', search);
     this.setState({
       search: search,
       searching: true

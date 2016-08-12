@@ -1,11 +1,7 @@
 import React, { Component, PropTypes } from 'react';
-import { ShowProject, RenderMarkdown } from './Common'
+import { ShowProject, RenderMarkdown, RenderHighlight } from './Common'
 import { SLICE_START, SLICE_INCREMENT } from './Constants'
-
-function escapeRegExp(string){
-  return string.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, '\\$1');
-}
-
+import { tokenizer, stemmer, trimmer } from 'elasticlunr'
 
 export default class List extends Component {
   static propTypes = {
@@ -34,6 +30,7 @@ export default class List extends Component {
     this.handleListScroll = this.handleListScroll.bind(this)
     this.resetSelectedProjects = this.resetSelectedProjects.bind(this)
     this.resetSelectedStatuses = this.resetSelectedStatuses.bind(this)
+    this.resetSearch = this.resetSearch.bind(this)
   }
 
   handleListScroll(event) {
@@ -49,35 +46,6 @@ export default class List extends Component {
       }
     }, 200)
   }
-
-  // updateLunr() {
-  //   let t0=performance.now()
-  //   this.lunrindex = elasticlunr(function() {
-  //     this.addField('title')
-  //     this.addField('body')
-  //     this.addField('type')
-  //     this.addField('issue_id')
-  //     this.addField('project_id')
-  //     this.setRef('id')
-  //     // not store the original JSON document to reduce the index size
-  //     this.saveDocument(false)
-  //   })
-  //
-  //   this.state.issuesAll.forEach(issue => {
-  //     this.lunrindex.addDoc({
-  //       id: issue.id,
-  //       title: issue.title,
-  //       body: issue.metadata.body,
-  //       type: 'ISSUE',
-  //       issue_id: issue.id,
-  //       project_id: issue.project.id
-  //     })
-  //   })
-  //   let t1=performance.now()
-  //   console.log('THAT TOOK ' + (t1 - t0)/ 1000);
-  //   // console.log('READ', issues.length, 'issues');
-  // }
-
 
   selectProject(event, project) {
     event.preventDefault()
@@ -117,12 +85,12 @@ export default class List extends Component {
       clearTimeout(this.searchThrottleTimer)
     }
     this.searchThrottleTimer = setTimeout(() => {
-      console.log('Searching for...:', this.refs.search.value.trim());
+      // console.log('Searching for...:', this.refs.search.value.trim());
       let search = this.refs.search.value.trim()
       this.props.searchChanged(search)
       // this.setState({search: search})
       // this.loadIssues()
-    }, 500)
+    }, 700)
   }
 
   submitSearchForm(event) {
@@ -153,6 +121,11 @@ export default class List extends Component {
   resetSelectedStatuses(event) {
     event.preventDefault()
     this.props.statusesSelected([])
+  }
+
+  resetSearch(event) {
+    event.preventDefault()
+    this.clearSearch()
   }
 
   render() {
@@ -222,48 +195,28 @@ export default class List extends Component {
       )
     }
 
-    // let searchRegex = null
-    // if (this.state.search) {
-    //   // searchRegex = new RegExp(escapeRegExp(this.state.search), 'i')
-    //   if (this.props.lunrindex) {
-    //     let searchResults = this.props.lunrindex.search(this.state.search)
-    //     console.log(searchResults);
-    //     let refs = searchResults.map(result => parseInt(result.ref))
-    //     // let refs = searchResults.map(result => result.ref)
-    //     console.log('REFS', refs);
-    //     this.props.db.issues.where('id').anyOf(refs).toArray().then(issues => {
-    //       console.log('FOUND', issues);
-    //     })
-    //   }
-    // }
-    // let issues = this.props.issues.filter(issue => {
-    //   // XXX need to depend on active statuses
-    //
-    //   if (this.state.selectedProjects.length) {
-    //     if (!this.state.selectedProjects.find(p => p.id === issue.project.id)) {
-    //       return false
-    //     }
-    //   }
-    //   // if (searchRegex) {
-    //   //   if (issue.title.search(searchRegex) < 0) {
-    //   //     return false
-    //   //   }
-    //   // }
-    //   return issue
-    // })
-
-    // let slicedIssues = issues.slice(0, this.state.slice)
-    // let canLoadMore = this.state.slice < issues.length
-    // let canLoadMore = this.props.canLoadMore
-    let { canLoadMore, issues, loadingMore } = this.props
-
+    let { canLoadMore, issues, loadingMore, search } = this.props
+    let searchTerms = null
+    if (search && search.length > 1) {
+      searchTerms = [search]
+      tokenizer(search).forEach(token => {
+        token = trimmer(token)
+        if (searchTerms.indexOf(token) === -1) {
+          searchTerms.push(token)
+        }
+        token = stemmer(token)
+        if (searchTerms.indexOf(token) === -1) {
+          searchTerms.push(token)
+        }
+      })
+    }
     let filteredTooMuch = null
     if (!issues.length) {
       filteredTooMuch = (
         <div className="email-item">
           <p>Filtered too much?</p>
-          { this.props.search.length ?
-          <p>Matching only: <code>{this.props.search}</code>.
+          { search.length ?
+          <p>Matching only: <code>{search}</code>.
             <a href="#" onClick={this.resetSearch}>Reset search</a>
           </p> : null }
           { this.props.selectedProjects.length ?
@@ -315,7 +268,9 @@ export default class List extends Component {
                 key={issue.id}
                 active={this.props.activeIssue && this.props.activeIssue.id === issue.id}
                 issueClicked={(i) => this.issueClicked(i)}
-                issue={issue}/>
+                issue={issue}
+                searchTerms={searchTerms}
+                />
             })
           }
           {filteredTooMuch}
@@ -343,7 +298,7 @@ export default class List extends Component {
 
 
 
-const Issue = ({ issue, issueClicked, active }) => {
+const Issue = ({ issue, issueClicked, active, searchTerms }) => {
   let issueAvatarURL = issue.metadata.user.avatar_url
   let className = 'email-item pure-g'
   if (active) {
@@ -352,6 +307,12 @@ const Issue = ({ issue, issueClicked, active }) => {
   let extract = issue.extract
   if (!extract) {
     extract = issue.metadata.body
+  }
+  let title = issue.title
+  if (searchTerms) {
+    title = <RenderHighlight
+      text={issue.title}
+      terms={searchTerms}/>
   }
   return (
     <div
@@ -393,8 +354,7 @@ const Issue = ({ issue, issueClicked, active }) => {
               alt="Padlock"
               title="Only visible to people who are cool"/> : null
           }
-          <span>{issue.title}</span>
-          <br/><small>{issue.updated_at_ts}</small>
+          {title}
         </h4>
 
         <p className="email-desc">

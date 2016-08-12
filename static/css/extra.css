@@ -533,3 +533,8 @@ span.project-name a:hover {
 .button-small {
     font-size: 80%;
 }
+
+
+h4.email-subject b {
+    background-color: #fff2a8;
+}
