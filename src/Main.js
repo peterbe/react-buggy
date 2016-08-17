@@ -212,10 +212,10 @@ class Issue extends Component {
     .then(() => {
       this.setState({refreshing: false})
     })
-    .catch(err => {
-      console.error(err)
-      this.setState({refreshing: false})
-    })
+    // .catch(err => {
+    //   console.error(err)
+    //   this.setState({refreshing: false})
+    // })
   }
 
   render() {

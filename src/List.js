@@ -304,6 +304,9 @@ const Issue = ({ issue, issueClicked, active, searchTerms }) => {
   if (active) {
     className += ' email-item-active'
   }
+  if (issue.new) {
+    className += ' email-item-unread'
+  }
   let extract = issue.extract
   if (!extract) {
     extract = issue.metadata.body
@@ -314,6 +317,7 @@ const Issue = ({ issue, issueClicked, active, searchTerms }) => {
       text={issue.title}
       terms={searchTerms}/>
   }
+
   return (
     <div
       className={className}

@@ -434,6 +434,11 @@ a.external:after {
   box-shadow: 0 0 1px 1px rgba(0, 0, 0, 0.25), inset 0 1px rgba(255, 255, 255, 0.1);
 }
 
+.markdown h2 {
+    font-size: 1.3em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid #eee;
+}
 .markdown pre {
     padding: 16px;
     overflow: auto;

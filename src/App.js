@@ -53,6 +53,11 @@ export default class App extends Component {
 
   }
   componentDidMount() {
+    // Maintain a mapping of *when* we download an issue's comments.
+    this.issueCommentsUpdatedAt = {}
+    // Maintain a mapping of *when* we download a project's issues.
+    this.projectsUpdatedAt = {}
+
     this.schemaBuilder.connect().then(db => {
       this.db = db
       this.setState({db: db})
@@ -77,7 +82,6 @@ export default class App extends Component {
       })
       this.loadLunr()
     })
-
   }
 
   componentWillUnmount() {
@@ -265,7 +269,7 @@ export default class App extends Component {
   downloadNewIssues(project) {
     // Download all open and closed issues we can find for this
     // project.
-
+    let issuesTable = this.db.getSchema().table('Issue')
     let maxDeepFetches = 20
     let deepFetches = 0
     const downloadIssues = (url) => {
@@ -290,47 +294,68 @@ export default class App extends Component {
       })
       .then(issues => {
         if (issues) {
-          // let projectsTable = this.db.getSchema().table('Project')
-          let issuesTable = this.db.getSchema().table('Issue')
-          // this.db.select().from(projectsTable).where(projectsTable.id.eq(project.id)).exec()
-          // .then(projectRow => {
-          //   console.log('projectRow', projectRow);
-
-            let rows = issues.map(issue => {
-              return issuesTable.createRow({
-                id: issue.id,
-                state: issue.state,
-                title: issue.title,
-                updated_at: new Date(issue.updated_at),
-                comments: issue.comments,
-                extract: null,
-                last_actor: null,
-                metadata: issue,
-                project: project,
-                // project: projectRow,
-                project_id: project.id,
-              })
+          let rows = issues.map(issue => {
+            return this._createIssueRow(issuesTable, {
+              id: issue.id,
+              state: issue.state,
+              title: issue.title,
+              updated_at: new Date(issue.updated_at),
+              comments: issue.comments,
+              extract: null,
+              last_actor: null,
+              metadata: issue,
+              new: true,
+              // project: project,
+              project_id: project.id,
             })
+            // return issuesTable.createRow({
+            //   id: issue.id,
+            //   state: issue.state,
+            //   title: issue.title,
+            //   updated_at: new Date(issue.updated_at),
+            //   comments: issue.comments,
+            //   extract: null,
+            //   last_actor: null,
+            //   metadata: issue,
+            //   new: true,
+            //   // project: project,
+            //   project_id: project.id,
+            // })
+          })
 
-            return this.db.insertOrReplace().into(issuesTable).values(rows).exec()
-            .then(inserted => {
-              console.log("Inserted...", inserted.length, 'issues for ', project.org, project.repo);
-            })
-
-          // })
-
-          // XXX Need to download closed ones too
+          return this.db.insertOrReplace().into(issuesTable).values(rows).exec()
+          .then(inserted => {
+            console.log("Inserted...", inserted.length, 'issues for ', project.org, project.repo);
+          })
         }
       })
-      // .catch(err => {
-      //   console.warn('Unable to download issues from ' + url);
-      //   console.error(err);
-      // })
     }
     let url = 'https://api.github.com'
     url += `/repos/${project.org}/${project.repo}/issues`
-    return downloadIssues(url)
 
+    return this.db.select(lf.fn.max(issuesTable.updated_at)).from(issuesTable)
+    .where(issuesTable.project_id.eq(project.id)).exec().then(result => {
+      let since = result[0]['MAX(updated_at)']
+      if (!since) {
+        // This happens when the project doesn't have any issues, or
+        // we've never downloaded issues for it before.
+        if (this.projectsUpdatedAt[project.id]) {
+          since = this.projectsUpdatedAt[project.id]
+        }
+      }
+      if (since) {
+        // GitHub uses the since= as >= meaning that it will always return
+        // something. Increment it by 1 second.
+        since.setSeconds(since.getSeconds() + 1);
+        since = since.toISOString()
+        url += url.indexOf('?') > -1 ? '&' : '?'
+        url += `since=${since}`
+      }
+      console.log("Downloading issues from:", url);
+      return downloadIssues(url).then(() => {
+        this.projectsUpdatedAt[project.id] = new Date()
+      })
+    })
   }
 
   selectStatus(status) {
@@ -348,7 +373,6 @@ export default class App extends Component {
       this.setState({projects: projects})
 
       // save it persistently too
-      // this.db.projects.add(project)
       let projectsTable = this.db.getSchema().table('Project')
       let row = projectsTable.createRow({
         id: project.id,
@@ -363,6 +387,7 @@ export default class App extends Component {
         this.downloadNewIssues(project)
         .then(() => {
           // if (!this.state.issues.length) {
+          this.recountStatuses()
           this.loadIssues()
           // }
         })
@@ -380,27 +405,16 @@ export default class App extends Component {
     if (this.state.issue && this.state.issue.project.id === project.id) {
       stateChange.issue = null
     }
-    // stateChange.issuesAll = this.state.issuesAll.filter(i => {
-    //   return i.project.id !== project.id
-    // })
-    this.setState(stateChange)
 
-    throw new Error('work harder')
-    this.db.comments
-    .where('project_id')
-    .equals(project.id)
-    .delete()
-
-    this.db.issues
-    .where('project_id')
-    .equals(project.id)
-    .delete()
-
-    this.db.projects
-    .where('id')
-    .equals(project.id)
-    .delete()
-
+    let projectsTable = this.db.getSchema().table('Project')
+    return this.db.delete()
+    .from(projectsTable)
+    .where(projectsTable.id.eq(project.id)).exec().then(() => {
+      this.setState(stateChange, () => {
+        this.recountStatuses()
+        this.loadIssues()
+      })
+    })
   }
 
   _clearAll(e) {
@@ -470,6 +484,7 @@ export default class App extends Component {
   }
 
   updateIssueComments(issue) {
+    let commentsTable = this.db.getSchema().table('Comment')
 
     let maxDeepFetches = 20
     let deepFetches = 0
@@ -495,11 +510,12 @@ export default class App extends Component {
       })
       .then(comments => {
         if (comments) {
-          let commentsTable = this.db.getSchema().table('Comment')
+          // let commentsTable = this.db.getSchema().table('Comment')
           let wrapped = comments.map(comment => {
             return {
               id: comment.id,
               created_at: new Date(comment.created_at),
+              updated_at: new Date(comment.updated_at),
               metadata: comment,
               issue_id: issue.id,
               project_id: issue.project.id,
@@ -524,7 +540,35 @@ export default class App extends Component {
     let url = 'https://api.github.com/'
     url += `repos/${issue.project.org}/${issue.project.repo}/issues/`
     url += `${issue.metadata.number}/comments`
-    return downloadComments(url)
+    // there's no point downloading comments we have already downloaded
+
+    return this.db.select(lf.fn.max(commentsTable.updated_at)).from(commentsTable)
+    .where(commentsTable.issue_id.eq(issue.id)).exec().then(result => {
+      let since = result[0]['MAX(updated_at)']
+      if (!since) {
+        // This happens when the issue doesn't have any comments. So,
+        // instead we maintain our own little memory of when we did this
+        if (this.issueCommentsUpdatedAt[issue.id]) {
+          since = this.issueCommentsUpdatedAt[issue.id]
+        }
+      }
+      if (since) {
+        // GitHub uses the since= as >= meaning that it will always return
+        // something. Increment it by 1 second.
+        since.setSeconds(since.getSeconds() + 1);
+        since = since.toISOString()
+        url += url.indexOf('?') > -1 ? '&' : '?'
+        url += `since=${since}`
+      }
+      // XXX The browser and the GitHub API is smart with Etags etc
+      // but we might want to consider NOT triggering a comments
+      // download if we just did it a couple of seconds ago.
+      console.log("Downloading comments from:", url);
+      return downloadComments(url).then(() => {
+        // remember that we started this download
+        this.issueCommentsUpdatedAt[issue.id] = new Date()
+      })
+    })
   }
 
   updateIssueLastComment(comment) {
@@ -540,20 +584,25 @@ export default class App extends Component {
       let row = issuesTable.createRow(issue)
       this.db.insertOrReplace().into(issuesTable).values([row]).exec()
       .then(updated => {
-        let found = false
-        let issues = this.state.issues.map(i => {
-          if (i.id === issue.id) {
-            found = true
-            return issue
-          } else {
-            return i
-          }
-        })
-        if (found) {
-          this.setState({issues: issues})
-        }
+        this.overrideIssueInLoadedIssues(issue)
       })
     })
+  }
+
+  overrideIssueInLoadedIssues(issue) {
+    let found = false
+    let issues = this.state.issues.map(i => {
+      if (i.id === issue.id) {
+        found = true
+        // swap this one out
+        return issue
+      } else {
+        return i
+      }
+    })
+    if (found) {
+      this.setState({issues: issues})
+    }
   }
 
   refreshIssue(issue) {
@@ -566,30 +615,50 @@ export default class App extends Component {
     .then(this.fetchResponseProxy)
     .then(r => r.json())
     .then(response => {
-
-      let issuesTable = this.db.getSchema().table('Issue')
-      let issueWrapped = {
-        id: issue.id,
-        state: response.state,
-        title: response.title,
-        updated_at: new Date(response.updated_at),
-        comments: response.comments,
-        extract: issue.extract,
-        last_actor: issue.last_actor,
-        metadata: response,
-        project_id: issue.project_id,
-      }
-      var row = issuesTable.createRow(issueWrapped)
-      return this.db.insertOrReplace().into(issuesTable).values([row]).exec()
-      .then(inserted => {
-        return this.updateIssueComments(issue)
-      })
-      if (this.state.issue && this.state.issue.id === response.id) {
-        // this is the current open issue, update state.
-        this.setState({issue: issueWrapped})
+      if (response) {
+        let issuesTable = this.db.getSchema().table('Issue')
+        let row = this._createIssueRow(issuesTable, {
+          id: issue.id,
+          state: response.state,
+          title: response.title,
+          updated_at: new Date(response.updated_at),
+          comments: response.comments,
+          extract: issue.extract,
+          last_actor: issue.last_actor,
+          metadata: response,
+          new: false,
+          project_id: issue.project_id,
+        })
+        return this.db.insertOrReplace().into(issuesTable).values([row]).exec()
+        .then(inserted => {
+          let insertedIssue = inserted[0]
+          insertedIssue.project = issue.project
+          this.overrideIssueInLoadedIssues(insertedIssue)
+          return this.updateIssueComments(issue)
+        })
+        if (this.state.issue && this.state.issue.id === response.id) {
+          // this is the current open issue, update state.
+          this.setState({issue: issueWrapped})
+        }
+      } else {
+        return new Promise((resolve, reject) => {
+          reject('No response')
+        })
       }
     })
+  }
 
+  _createIssueRow(table, issue) {
+    if (!issue.id) {
+      throw new Error('issue lacks an ID')
+    }
+    if (!issue.project_id) {
+      throw new Error('issue lacks a project ID')
+    }
+    if (typeof issue.updated_at !== 'object') {
+      throw new Error('issue.updated_at must be an object')
+    }
+    return table.createRow(issue)
   }
 
   toggleShowConfig() {

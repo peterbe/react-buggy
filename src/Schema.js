@@ -22,7 +22,7 @@ const getSchema = () => {
   .addColumn('extract', lf.Type.STRING)
   .addColumn('last_actor', lf.Type.OBJECT)
   .addColumn('metadata', lf.Type.OBJECT)
-  // .addColumn('project', lf.Type.OBJECT)
+  .addColumn('new', lf.Type.BOOL)
   .addColumn('project_id', lf.Type.INTEGER)
   .addForeignKey('fk_project_id', {
     local: 'project_id',
@@ -38,6 +38,7 @@ const getSchema = () => {
   schema.createTable('Comment')
   .addColumn('id', lf.Type.INTEGER)
   .addColumn('created_at', lf.Type.DATE_TIME)
+  .addColumn('updated_at', lf.Type.DATE_TIME)
   .addColumn('metadata', lf.Type.OBJECT)
   .addColumn('issue_id', lf.Type.INTEGER)
   .addForeignKey('fk_issue_id', {
