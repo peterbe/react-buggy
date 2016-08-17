@@ -332,6 +332,7 @@ export default class App extends Component {
     }
     let url = 'https://api.github.com'
     url += `/repos/${project.org}/${project.repo}/issues`
+    url += '?sort=updated'
 
     return this.db.select(lf.fn.max(issuesTable.updated_at)).from(issuesTable)
     .where(issuesTable.project_id.eq(project.id)).exec().then(result => {
@@ -540,6 +541,7 @@ export default class App extends Component {
     let url = 'https://api.github.com/'
     url += `repos/${issue.project.org}/${issue.project.repo}/issues/`
     url += `${issue.metadata.number}/comments`
+    url += '?sort=updated'
     // there's no point downloading comments we have already downloaded
 
     return this.db.select(lf.fn.max(commentsTable.updated_at)).from(commentsTable)
