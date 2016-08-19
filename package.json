@@ -22,26 +22,26 @@
   },
   "homepage": "https://github.com/peterbe/react-buggy",
   "devDependencies": {
-    "babel-core": "^6.0.20",
-    "babel-eslint": "^4.1.3",
-    "babel-loader": "^6.0.1",
-    "babel-preset-es2015": "^6.0.15",
-    "babel-preset-react": "^6.0.15",
-    "babel-preset-stage-0": "^6.0.15",
-    "eslint": "^1.10.3",
-    "eslint-plugin-react": "^3.6.2",
-    "react-hot-loader": "^3.0.0-beta.1",
-    "webpack": "^1.12.2",
-    "webpack-dev-server": "^1.12.1"
+    "babel-core": "6.13.2",
+    "babel-eslint": "6.1.2",
+    "babel-loader": "6.2.5",
+    "babel-preset-es2015": "6.13.2",
+    "babel-preset-react": "6.11.1",
+    "babel-preset-stage-0": "6.5.0",
+    "eslint": "3.3.1",
+    "eslint-plugin-react": "6.1.2",
+    "react-hot-loader": "3.0.0-beta.2",
+    "webpack": "1.13.2",
+    "webpack-dev-server": "1.14.1"
   },
   "dependencies": {
     "elasticlunr": "0.9.0",
     "lovefield": "2.1.9",
-    "marked": "0.3.5",
+    "marked": "0.3.6",
     "moment": "2.14.1",
     "parse-link-header": "0.4.1",
-    "react": "^15.0.1",
-    "react-dom": "^15.0.1",
+    "react": "15.3.1",
+    "react-dom": "15.3.1",
     "whatwg-fetch": "1.0.0"
   }
 }
