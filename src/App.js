@@ -70,7 +70,6 @@ export default class App extends Component {
       })
       this.recountStatuses()
       this.loadIssues().then(() => {
-        this.downloadNewIssues()
         let activeissueId = sessionStorage.getItem('activeissue')
         if (activeissueId) {
           this.state.issues.forEach(issue => {
@@ -309,24 +308,12 @@ export default class App extends Component {
               // project: project,
               project_id: project.id,
             })
-            // return issuesTable.createRow({
-            //   id: issue.id,
-            //   state: issue.state,
-            //   title: issue.title,
-            //   updated_at: new Date(issue.updated_at),
-            //   comments: issue.comments,
-            //   extract: null,
-            //   last_actor: null,
-            //   metadata: issue,
-            //   new: true,
-            //   // project: project,
-            //   project_id: project.id,
-            // })
           })
 
           return this.db.insertOrReplace().into(issuesTable).values(rows).exec()
           .then(inserted => {
             console.log("Inserted...", inserted.length, 'issues for ', project.org, project.repo);
+            return inserted
           })
         }
       })
@@ -480,8 +467,10 @@ export default class App extends Component {
     this.state.issues.map(issue => {
       if (issue.comments && (!issue.last_actor || !issue.extract)) {
         this.updateIssueComments(issue).then(inserted => {
-          console.log('Updated issue comments for ', issue.title, inserted.length, 'comments');
-          inserted += inserted.length
+          console.log('Updated issue comments for ', issue.title, inserted, 'comments');
+          if (inserted) {
+            inserted += inserted.length
+          }
         })
       }
     })
