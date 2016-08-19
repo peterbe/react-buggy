@@ -70,6 +70,7 @@ export default class App extends Component {
       })
       this.recountStatuses()
       this.loadIssues().then(() => {
+        this.downloadNewIssues()
         let activeissueId = sessionStorage.getItem('activeissue')
         if (activeissueId) {
           this.state.issues.forEach(issue => {
@@ -239,7 +240,7 @@ export default class App extends Component {
   }
 
   loadLunr() {
-    let t0=performance.now()
+    let t0 = performance.now()
     this.lunrindex = elasticlunr(function() {
       this.addField('title')
       this.addField('body')
@@ -260,7 +261,7 @@ export default class App extends Component {
           type: 'ISSUE',
         })
       })
-      let t1=performance.now()
+      let t1 = performance.now()
       console.log('THAT TOOK ' + (t1 - t0)/ 1000);
     })
 
@@ -475,13 +476,20 @@ export default class App extends Component {
     // Similar to updateIssueComments() but run it for all issues loaded
     // but only those who have no (last_actor & extract) but supposedly
     // has comments.
+    let inserts = 0
     this.state.issues.map(issue => {
       if (issue.comments && (!issue.last_actor || !issue.extract)) {
-        this.updateIssueComments(issue).then(() => {
-          // console.log('Updated issue comments for ', issue.title);
+        this.updateIssueComments(issue).then(inserted => {
+          console.log('Updated issue comments for ', issue.title, inserted.length, 'comments');
+          inserted += inserted.length
         })
       }
     })
+    if (inserts) {
+      // New comments have been inserted, that means the sort order might
+      // have been changed.
+      this.loadIssues()
+    }
   }
 
   updateIssueComments(issue) {
@@ -534,6 +542,7 @@ export default class App extends Component {
               // this is the current open issue, update the comments state
               this.readComments(issue)
             }
+            return inserted
           })
         }
       })
@@ -541,9 +550,10 @@ export default class App extends Component {
     let url = 'https://api.github.com/'
     url += `repos/${issue.project.org}/${issue.project.repo}/issues/`
     url += `${issue.metadata.number}/comments`
-    url += '?sort=updated'
-    // there's no point downloading comments we have already downloaded
 
+    // There's no point downloading comments we have already downloaded,
+    // so find out what the max updated_at date is and set that as a
+    // ?since=:since query string.
     return this.db.select(lf.fn.max(commentsTable.updated_at)).from(commentsTable)
     .where(commentsTable.issue_id.eq(issue.id)).exec().then(result => {
       let since = result[0]['MAX(updated_at)']
