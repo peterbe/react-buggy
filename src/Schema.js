@@ -22,6 +22,7 @@ const getSchema = () => {
   .addColumn('extract', lf.Type.STRING)
   .addColumn('last_actor', lf.Type.OBJECT)
   .addColumn('metadata', lf.Type.OBJECT)
+  .addColumn('_html', lf.Type.STRING)
   .addColumn('new', lf.Type.BOOL)
   .addColumn('project_id', lf.Type.INTEGER)
   .addForeignKey('fk_project_id', {
@@ -40,6 +41,7 @@ const getSchema = () => {
   .addColumn('created_at', lf.Type.DATE_TIME)
   .addColumn('updated_at', lf.Type.DATE_TIME)
   .addColumn('metadata', lf.Type.OBJECT)
+  .addColumn('_html', lf.Type.STRING)
   .addColumn('issue_id', lf.Type.INTEGER)
   .addForeignKey('fk_issue_id', {
     local: 'issue_id',

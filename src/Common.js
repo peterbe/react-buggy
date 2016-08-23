@@ -1,38 +1,40 @@
 import React, { Component } from 'react';
-import marked from 'marked'
+// import marked from 'marked'
+import showdown from 'showdown'
 
 
-marked.setOptions({
-  renderer: new marked.Renderer(),
-  gfm: true,
+// Options from https://www.npmjs.com/package/showdown
+const showdownConverter = new showdown.Converter({
+  simplifiedAutoLink: true,
+  noHeaderId: true,
+  strikethrough: true,
+  tasklists: true,
   tables: true,
-  breaks: false,
-  pedantic: false,
-  sanitize: true,
-  smartLists: true,
-  smartypants: false,
-});
+  ghCodeBlocks: true,
+})
 
+export const generateMarkdownHtml = (text) => {
+  return showdownConverter.makeHtml(text)
+}
 
 export const ShowProject = ({ project }) => {
   let orgURL = `https://github.com/${project.org}`
   let repoURL = orgURL + `/${project.repo}`
   return (
     <span className="project-name">
-      <a href={orgURL} target="_blank">{project.org}</a>
+      <a href={orgURL} target="_blank" rel="noopener">{project.org}</a>
       <span>/</span>
-      <a href={repoURL} target="_blank">{project.repo}</a>
+      <a href={repoURL} target="_blank" rel="noopener">{project.repo}</a>
     </span>
   )
 }
 
-export const RenderMarkdown = ({ text }) => {
-  if (typeof text === 'undefined') {
-    throw new Error('text should not be undefined!')
+export const RenderMarkdown = ({ html }) => {
+  if (typeof html === 'undefined') {
+    throw new Error('html should not be undefined!')
   }
-  text = text || ''  // it might be null
-  text = marked(text)
-  let rendered = {__html: text}
+  html = html || ''  // it might be null
+  let rendered = {__html: html}
   return <div className="markdown" dangerouslySetInnerHTML={rendered}></div>
 }
 

@@ -11,6 +11,7 @@ import elasticlunr from 'elasticlunr'
 import lf from 'lovefield'
 import getSchema from './Schema'
 import { SLICE_START, SLICE_INCREMENT } from './Constants'
+import { generateMarkdownHtml } from './Common'
 
 // If you use React Router, make this component
 // render <Router> with your routes. Currently,
@@ -299,6 +300,7 @@ export default class App extends Component {
               id: issue.id,
               state: issue.state,
               title: issue.title,
+              _html: generateMarkdownHtml(issue.body),
               updated_at: new Date(issue.updated_at),
               comments: issue.comments,
               extract: null,
@@ -515,6 +517,7 @@ export default class App extends Component {
               created_at: new Date(comment.created_at),
               updated_at: new Date(comment.updated_at),
               metadata: comment,
+              _html: generateMarkdownHtml(comment.body),
               issue_id: issue.id,
               project_id: issue.project.id,
             }
@@ -580,8 +583,9 @@ export default class App extends Component {
     .where(issuesTable.id.eq(comment.issue_id)).exec().then(results => {
       let issue = results[0].Issue
       issue.project = results[0].Project
-      issue.extract = makeExtract(comment.metadata.body)
+      issue.extract = generateMarkdownHtml(makeExtract(comment.metadata.body))
       issue.last_actor = comment.metadata.user
+      // console.log("TRYING TO CREATE ROW", issue);
       let row = issuesTable.createRow(issue)
       this.db.insertOrReplace().into(issuesTable).values([row]).exec()
       .then(updated => {
@@ -614,7 +618,16 @@ export default class App extends Component {
 
     return fetch(url)
     .then(this.fetchResponseProxy)
-    .then(r => r.json())
+    // .then(r => r.json())
+    .then(r => {
+      if (r.status === 200) {
+        return r.json()
+      } else {
+        throw new Error(
+          `Failed to download ${url} (status code: ${r.status})`
+        )
+      }
+    })
     .then(response => {
       if (response) {
         let issuesTable = this.db.getSchema().table('Issue')
@@ -622,6 +635,7 @@ export default class App extends Component {
           id: issue.id,
           state: response.state,
           title: response.title,
+          _html: generateMarkdownHtml(response.body),
           updated_at: new Date(response.updated_at),
           comments: response.comments,
           extract: issue.extract,
@@ -647,16 +661,26 @@ export default class App extends Component {
         })
       }
     })
+    .catch(err => {
+      console.error('refreshIssue error', err);
+    })
   }
 
   _createIssueRow(table, issue) {
     if (!issue.id) {
+      console.warn(issue);
       throw new Error('issue lacks an ID')
     }
+    if (!issue.state) {
+      console.warn(issue);
+      throw new Error('issue lacks a state')
+    }
     if (!issue.project_id) {
+      console.warn(issue);
       throw new Error('issue lacks a project ID')
     }
     if (typeof issue.updated_at !== 'object') {
+      console.warn(issue);
       throw new Error('issue.updated_at must be an object')
     }
     return table.createRow(issue)

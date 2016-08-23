@@ -235,7 +235,11 @@ class Issue extends Component {
       sticky = (
         <div className="sticky-summary">
           <h5>
-            <a href={issue.metadata.html_url} target="_blank" className="external">{issue.metadata.number}</a>
+            <a
+              href={issue.metadata.html_url}
+              target="_blank"
+              rel="noopener"
+              className="external">{issue.metadata.number}</a>
             {' '}
             <ShowProject project={issue.project}/>
             {' '}
@@ -318,7 +322,7 @@ class Issue extends Component {
 
         <div className="email-content-body">
           <div className="pure-u-3-4">
-            <ShowDescription body={issue.metadata.body} />
+            <ShowDescription body={issue._html} />
 
           </div>
         </div>
@@ -346,7 +350,7 @@ class Issue extends Component {
 
 const ShowDescription = ({ body }) => {
   if (body && body.length) {
-    return <RenderMarkdown text={body}/>
+    return <RenderMarkdown html={body}/>
   } else {
     return <i>No description provided.</i>
   }
@@ -365,13 +369,13 @@ const Comment = ({ comment, index }) => {
         <p className="email-content-subtitle">
           By <User user={comment.user} /> at
           {' '}
-          <a href={comment.html_url} target="_blank">
+          <a href={comment.html_url} target="_blank" rel="noopener">
             <Datetime date={comment.created_at} />
           </a>
           {' '}
           <small style={{opacity:0.6}}>(comment #{index+1})</small>
         </p>
-        <RenderMarkdown text={comment.body}/>
+        <RenderMarkdown html={comment._html}/>
       </div>
 
     </div>
@@ -783,15 +787,14 @@ const FoundRepos = ({ repos, clickedFoundRepo, closeFoundRepos }) => {
         <tbody>
         {
           repos.map(repo => {
-            // console.log('FOUND', repo)
-            // console.log('Owner', repo.owner.login);
             return (
               <tr key={repo.id}>
                 <td>
                   <a
                     href={repo.html_url}
                     title={repo.description}
-                    target="_blank">
+                    target="_blank"
+                    rel="noopener">
                     {repo.owner.login} / {repo.name}
                   </a>
                 </td>

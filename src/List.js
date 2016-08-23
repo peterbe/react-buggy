@@ -347,7 +347,7 @@ const Issue = ({ issue, issueClicked, active, searchTerms }) => {
           {' '}
           <a
             href={issue.metadata.html_url}
-            target="_blank">#{issue.metadata.number}</a>
+            target="_blank" rel="noopener">#{issue.metadata.number}</a>
         </h5>
         <h4 className="email-subject">
           {
@@ -374,7 +374,7 @@ const Issue = ({ issue, issueClicked, active, searchTerms }) => {
           }
         </p>
         <div className="extract">
-          <RenderMarkdown text={extract}/>
+          <RenderMarkdown html={extract}/>
         </div>
 
       </div>
