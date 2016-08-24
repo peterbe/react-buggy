@@ -331,6 +331,7 @@ class Issue extends Component {
           comments.map((comment, i) => {
             return <Comment
                 comment={comment.metadata}
+                _html={comment._html}
                 key={comment.id}
                 index={i}
                 />
@@ -357,7 +358,7 @@ const ShowDescription = ({ body }) => {
 }
 
 
-const Comment = ({ comment, index }) => {
+const Comment = ({ comment, index, _html }) => {
   return (
     <div className="email-content-body">
       <div className="pure-u">
@@ -375,7 +376,7 @@ const Comment = ({ comment, index }) => {
           {' '}
           <small style={{opacity:0.6}}>(comment #{index+1})</small>
         </p>
-        <RenderMarkdown html={comment._html}/>
+        <RenderMarkdown html={_html}/>
       </div>
 
     </div>

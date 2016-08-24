@@ -309,7 +309,7 @@ const Issue = ({ issue, issueClicked, active, searchTerms }) => {
   }
   let extract = issue.extract
   if (!extract) {
-    extract = issue.metadata.body
+    extract = issue._html
   }
   let title = issue.title
   if (searchTerms) {

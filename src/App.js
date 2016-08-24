@@ -427,8 +427,15 @@ export default class App extends Component {
 
   issueClicked(issue) {
     this.setState({issue: issue, showConfig: false})
-    this.refreshIssue(issue)
 
+    // Delay the refresh issue slightly in case the user decides she
+    // clicked on the wrong one.
+    if (this.refreshIssueTimer) {
+      window.clearTimeout(this.refreshIssueTimer)
+    }
+    this.refreshIssueTimer = window.setTimeout(() => {
+      this.refreshIssue(issue)
+    }, 2000)
   }
 
   readComments(issue) {
@@ -585,7 +592,6 @@ export default class App extends Component {
       issue.project = results[0].Project
       issue.extract = generateMarkdownHtml(makeExtract(comment.metadata.body))
       issue.last_actor = comment.metadata.user
-      // console.log("TRYING TO CREATE ROW", issue);
       let row = issuesTable.createRow(issue)
       this.db.insertOrReplace().into(issuesTable).values([row]).exec()
       .then(updated => {
@@ -634,7 +640,7 @@ export default class App extends Component {
         let row = this._createIssueRow(issuesTable, {
           id: issue.id,
           state: response.state,
-          title: response.title,
+          title: response.title + Math.random(),
           _html: generateMarkdownHtml(response.body),
           updated_at: new Date(response.updated_at),
           comments: response.comments,
@@ -682,6 +688,10 @@ export default class App extends Component {
     if (typeof issue.updated_at !== 'object') {
       console.warn(issue);
       throw new Error('issue.updated_at must be an object')
+    }
+    if (typeof issue._html === 'undefined') {
+      console.warn(issue);
+      throw new Error('issue._html should be set before creating row')
     }
     return table.createRow(issue)
   }
