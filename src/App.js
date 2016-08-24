@@ -435,7 +435,7 @@ export default class App extends Component {
     }
     this.refreshIssueTimer = window.setTimeout(() => {
       this.refreshIssue(issue)
-    }, 2000)
+    }, 1000)
   }
 
   readComments(issue) {
