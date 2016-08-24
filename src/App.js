@@ -640,7 +640,7 @@ export default class App extends Component {
         let row = this._createIssueRow(issuesTable, {
           id: issue.id,
           state: response.state,
-          title: response.title + Math.random(),
+          title: response.title,
           _html: generateMarkdownHtml(response.body),
           updated_at: new Date(response.updated_at),
           comments: response.comments,

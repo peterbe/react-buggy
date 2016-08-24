@@ -3,6 +3,10 @@ import { ShowProject, RenderMarkdown, RenderHighlight } from './Common'
 import { SLICE_START, SLICE_INCREMENT } from './Constants'
 import { tokenizer, stemmer, trimmer } from 'elasticlunr'
 
+// import Perf from 'react-addons-perf'
+// window.Perf = Perf
+
+
 export default class List extends Component {
   static propTypes = {
     projectsAll: PropTypes.array.isRequired,
@@ -298,88 +302,197 @@ export default class List extends Component {
 
 
 
-const Issue = ({ issue, issueClicked, active, searchTerms }) => {
-  let issueAvatarURL = issue.metadata.user.avatar_url
-  let className = 'email-item pure-g'
-  if (active) {
-    className += ' email-item-active'
-  }
-  if (issue.new) {
-    className += ' email-item-unread'
-  }
-  let extract = issue.extract
-  if (!extract) {
-    extract = issue._html
-  }
-  let title = issue.title
-  if (searchTerms) {
-    title = <RenderHighlight
-      text={issue.title}
-      terms={searchTerms}/>
+// const Issue = ({ issue, issueClicked, active, searchTerms }) => {
+//   let issueAvatarURL = issue.metadata.user.avatar_url
+//   let className = 'email-item pure-g'
+//   if (active) {
+//     className += ' email-item-active'
+//   }
+//   if (issue.new) {
+//     className += ' email-item-unread'
+//   }
+//   let extract = issue.extract
+//   if (!extract) {
+//     extract = issue._html
+//   }
+//   let title = issue.title
+//   if (searchTerms) {
+//     title = <RenderHighlight
+//       text={issue.title}
+//       terms={searchTerms}/>
+//   }
+//
+//   console.log("Rendering issue ", issue.title);
+//
+//   return (
+//     <div
+//       className={className}
+//       onClick={(event) => issueClicked(issue)}>
+//       <div className="pure-u">
+//         {/* Only do this if we have an email address */}
+//         <img
+//           src={issueAvatarURL}
+//           height="32" width="32"
+//           className="email-avatar"
+//           alt="avatar"
+//           title="Person who created the Issue/Pull Request"/>
+//         <br/>
+//         <br/>
+//         { issue.comments ?
+//           <span
+//             style={{marginLeft: 10}}
+//             className="badge badge-small"
+//             title="Number of comments">{issue.comments}</span> : null
+//         }
+//
+//       </div>
+//       <div className="pure-u-5-6">
+//         <h5>
+//           <span className={`badge badge-small badge-${issue.state}`}>{issue.state}</span>
+//           <ShowProject project={issue.project}/>
+//           {' '}
+//           <a
+//             href={issue.metadata.html_url}
+//             target="_blank" rel="noopener">#{issue.metadata.number}</a>
+//         </h5>
+//         <h4 className="email-subject">
+//           {
+//             issue.project.private ?
+//             <img
+//               className="padlock"
+//               src="static/images/padlock.png"
+//               alt="Padlock"
+//               title="Only visible to people who are cool"/> : null
+//           }
+//           {title}
+//         </h4>
+//
+//         <p className="email-desc">
+//           {
+//             issue.last_actor ?
+//             <img
+//               src={issue.last_actor.avatar_url}
+//               className="email-avatar"
+//               alt="Avatar"
+//               title="Last person to comment"
+//               height="32" width="32" /> : null
+//
+//           }
+//         </p>
+//         <div className="extract">
+//           <RenderMarkdown html={extract}/>
+//         </div>
+//
+//       </div>
+//       { !active ? <span className="bottom"></span> : null }
+//
+//     </div>
+//   )
+// }
+// const Issue = ({ issue, issueClicked, active, searchTerms }) => {
+class Issue extends Component {
+  constructor(props) {
+    super(props)
   }
 
-  return (
-    <div
-      className={className}
-      onClick={(event) => issueClicked(issue)}>
-      <div className="pure-u">
-        {/* Only do this if we have an email address */}
-        <img
-          src={issueAvatarURL}
-          height="32" width="32"
-          className="email-avatar"
-          alt="avatar"
-          title="Person who created the Issue/Pull Request"/>
-        <br/>
-        <br/>
-        { issue.comments ?
-          <span
-            style={{marginLeft: 10}}
-            className="badge badge-small"
-            title="Number of comments">{issue.comments}</span> : null
-        }
+  shouldComponentUpdate(nextProps, nextState) {
+    // console.log('OLD', this.props.issue);
+    // console.log('NEXT', nextProps.issue);
+    // return shallowCompare(this, nextProps, nextState)
+    if (this.props.active !== nextProps.active) {
+      return true
+    }
+    // console.log(this.props.active, nextProps.active, this.props.issue.title);
+    return this.props.issue !== nextProps.issue
+    // return true
+  }
 
-      </div>
-      <div className="pure-u-5-6">
-        <h5>
-          <span className={`badge badge-small badge-${issue.state}`}>{issue.state}</span>
-          <ShowProject project={issue.project}/>
-          {' '}
-          <a
-            href={issue.metadata.html_url}
-            target="_blank" rel="noopener">#{issue.metadata.number}</a>
-        </h5>
-        <h4 className="email-subject">
-          {
-            issue.project.private ?
-            <img
-              className="padlock"
-              src="static/images/padlock.png"
-              alt="Padlock"
-              title="Only visible to people who are cool"/> : null
+  render() {
+    let { issue, issueClicked, active, searchTerms } = this.props
+    let issueAvatarURL = issue.metadata.user.avatar_url
+    let className = 'email-item pure-g'
+    if (active) {
+      className += ' email-item-active'
+    }
+    if (issue.new) {
+      className += ' email-item-unread'
+    }
+    let extract = issue.extract
+    if (!extract) {
+      extract = issue._html
+    }
+    let title = issue.title
+    if (searchTerms) {
+      title = <RenderHighlight
+        text={issue.title}
+        terms={searchTerms}/>
+    }
+
+    console.log("Rendering issue ", issue.title);
+
+    return (
+      <div
+        className={className}
+        onClick={(event) => issueClicked(issue)}>
+        <div className="pure-u">
+          {/* Only do this if we have an email address */}
+          <img
+            src={issueAvatarURL}
+            height="32" width="32"
+            className="email-avatar"
+            alt="avatar"
+            title="Person who created the Issue/Pull Request"/>
+          <br/>
+          <br/>
+          { issue.comments ?
+            <span
+              style={{marginLeft: 10}}
+              className="badge badge-small"
+              title="Number of comments">{issue.comments}</span> : null
           }
-          {title}
-        </h4>
 
-        <p className="email-desc">
-          {
-            issue.last_actor ?
-            <img
-              src={issue.last_actor.avatar_url}
-              className="email-avatar"
-              alt="Avatar"
-              title="Last person to comment"
-              height="32" width="32" /> : null
-
-          }
-        </p>
-        <div className="extract">
-          <RenderMarkdown html={extract}/>
         </div>
+        <div className="pure-u-5-6">
+          <h5>
+            <span className={`badge badge-small badge-${issue.state}`}>{issue.state}</span>
+            <ShowProject project={issue.project}/>
+            {' '}
+            <a
+              href={issue.metadata.html_url}
+              target="_blank" rel="noopener">#{issue.metadata.number}</a>
+          </h5>
+          <h4 className="email-subject">
+            {
+              issue.project.private ?
+              <img
+                className="padlock"
+                src="static/images/padlock.png"
+                alt="Padlock"
+                title="Only visible to people who are cool"/> : null
+            }
+            {title}
+          </h4>
+
+          <p className="email-desc">
+            {
+              issue.last_actor ?
+              <img
+                src={issue.last_actor.avatar_url}
+                className="email-avatar"
+                alt="Avatar"
+                title="Last person to comment"
+                height="32" width="32" /> : null
+
+            }
+          </p>
+          <div className="extract">
+            <RenderMarkdown html={extract}/>
+          </div>
+
+        </div>
+        { !active ? <span className="bottom"></span> : null }
 
       </div>
-      { !active ? <span className="bottom"></span> : null }
-
-    </div>
-  )
+    )
+  }
 }
