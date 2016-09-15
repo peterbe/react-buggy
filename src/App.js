@@ -335,12 +335,13 @@ export default class App extends Component {
         }
       }
       if (since) {
+        let copiedSince = new Date(since)
         // GitHub uses the since= as >= meaning that it will always return
         // something. Increment it by 1 second.
-        since.setSeconds(since.getSeconds() + 1);
-        since = since.toISOString()
+        copiedSince.setSeconds(copiedSince.getSeconds() + 1)
+        copiedSince = copiedSince.toISOString()
         url += url.indexOf('?') > -1 ? '&' : '?'
-        url += `since=${since}`
+        url += `since=${copiedSince}`
       }
       console.log("Downloading issues from:", url);
       return downloadIssues(url).then(() => {

@@ -253,7 +253,7 @@ export default class List extends Component {
           <form className="pure-form" id="searchform"
             onSubmit={(event) => this.submitSearchForm(event)}>
             <input
-              type="text"
+              type="search"
               ref="search"
               className="pure-input-rounded"
               onChange={(event) => this.search(event)}
@@ -427,8 +427,6 @@ class Issue extends Component {
         text={issue.title}
         terms={searchTerms}/>
     }
-
-    console.log("Rendering issue ", issue.title);
 
     return (
       <div

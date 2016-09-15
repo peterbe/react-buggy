@@ -210,9 +210,10 @@
 #searchform {
     margin: 5px;
 }
-#searchform input[type="text"] {
+#searchform input[type="search"] {
     width: 285px;
 }
+
 button.has-filters {
     font-weight: bold;
 }
